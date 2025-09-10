@@ -1,0 +1,12 @@
+[
+  {
+    "ContainingType": "WordRush.Web.Features.Game.GameController",
+    "Method": "Get",
+    "RelativePath": "api/games",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  }
+]

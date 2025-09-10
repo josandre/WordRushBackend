@@ -1,0 +1,133 @@
+###############################################################################
+# .NET / .NET Core — Backend
+###############################################################################
+
+########################
+# Archivos de usuario
+########################
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs                # MonoDevelop/Xamarin
+*.csproj.user
+*.vbproj.user
+
+########################
+# Carpetas de IDE
+########################
+.vs/                       # Visual Studio
+.vscode/                   # VS Code (ignora config local del dev)
+.idea/                     # JetBrains Rider
+*.sln.iml
+
+########################
+# Resultados de build
+########################
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+[Bb]uild/
+[Bb]ld/
+[Tt]est[Rr]esults/
+[Mm]igrations/              # ⚠ Normalmente SÍ se versionan; comenta esta línea si usas EF
+                           # Recomendación: elimina esta línea si vas a versionar migraciones.
+
+########################
+# Config de ejecución / publicación
+########################
+# launchSettings.json suele ser local a cada dev (puedes comentarlo si decides versionarlo)
+**/Properties/launchSettings.json
+
+# PublishProfiles de usuario (los .pubxml normales se pueden versionar)
+*/Properties/PublishProfiles/.pubxml.user
+*.publishproj.user
+
+########################
+# Paquetes/NuGet
+########################
+*.nupkg
+*.snupkg
+# packages/                 # Antiguo (PackageReference no lo usa)
+
+########################
+# Cobertura / análisis
+########################
+coverage*/
+coverage*.json
+coverage*.xml
+coverage*.info
+*.lcov
+*.coverage
+*.coveragexml
+*.dotCover
+*.opencover.xml
+*.sarif
+
+########################
+# Herramientas varias
+########################
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+.stylecop
+StyleCopReport.xml
+.nCrunch*/
+*.ncrunchsolution
+*.ncrunchproject
+*.nunit.xml
+# Tye
+.tye/
+
+########################
+# ASP.NET / Scaffolding
+########################
+ScaffoldingReadMe.txt
+
+########################
+# Azure Functions (si aplica)
+########################
+local.settings.json
+
+########################
+# Logs y temporales
+########################
+*.log
+*.tlog
+*.tmp
+*.temp
+~$*
+*.swp
+*.swo
+
+########################
+# SO / Editor
+########################
+.DS_Store                 # macOS
+Thumbs.db                 # Windows
+ehthumbs.db
+Icon?
+*.orig                    # merges
+*.rej
+
+########################
+# Docker (ajusta según tu flujo)
+########################
+# docker-compose.override.yml  # Descomenta si no quieres versionar overrides locales
+# **/.docker/                  # Directorios locales de Docker
+
+########################
+# AppSettings locales (recomendación)
+########################
+# Evita subir configs locales o con secretos
+appsettings.Local.json
+appsettings.*.Local.json
+appsettings.*.local.json
+# appsettings.Development.json  # Comenta esta línea si deciden versionarlo
+
+########################
+# Frontend embebido (si el backend sirve UI)
+########################
+**/wwwroot/node_modules/

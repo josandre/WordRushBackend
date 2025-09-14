@@ -1,15 +1,28 @@
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
+using WordRush.Web.Features.Game.Data;
 
 namespace WordRush.Web.Features.Game;
+
 [EnableCors]
 [ApiController]
 [Route("api/games")]
 public class GameController : ControllerBase
 {
+    /// <summary>
+    /// Returns a list with all games of the user.
+    /// </summary>
+    /// <returns>200 OK with a all games for the user.</returns>
     [HttpGet]
-    public IActionResult Get()
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(List<GameResponse>))]
+    public Task<ActionResult<List<GameResponse>>> Get()
     {
-        return Ok(new { message = "Hello Brain-Hub" });
+      List<GameResponse> result =
+      [
+        new() { Id = 1, Name = "Dummy game 1" },
+        new() { Id = 1, Name = "Dummy game 2" }
+      ];
+
+      return Task.FromResult<ActionResult<List<GameResponse>>>(Ok(result));
     }
 }

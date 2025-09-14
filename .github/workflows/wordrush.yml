@@ -20,13 +20,13 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Restore dependencies
-        run: dotnet restore MySolution.sln
+        run: dotnet restore WordRush.sln
 
       - name: Build
-        run: dotnet build MySolution.sln --no-restore --configuration Release
+        run: dotnet build WordRush.sln --no-restore --configuration Release
 
       - name: Run tests
-        run: dotnet test MySolution.sln --no-build --configuration Release --verbosity normal
+        run: dotnet test WordRush.sln --no-build --configuration Release --verbosity normal
 
   deploy:
     needs: build

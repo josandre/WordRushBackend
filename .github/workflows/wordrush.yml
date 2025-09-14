@@ -23,10 +23,10 @@ jobs:
         run: dotnet restore WordRush.sln
 
       - name: Build
-        run: dotnet build WordRush.sln --no-restore --configuration Release
+        run: dotnet build WordRush.sln --no-restore --configuration Release -warnaserror
 
       - name: Run tests
-        run: dotnet test WordRush.sln --no-build --configuration Release --verbosity normal
+        run: dotnet test WordRush.sln --no-build --configuration Release --verbosity normal -warnaserror
 
   deploy:
     needs: build

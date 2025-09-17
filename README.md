@@ -33,6 +33,107 @@ Comunicación vía **HTTPS** y **JWT**. Habilitar **CORS** para el dominio del c
 
 ---
 
+
+# 📐 Estándares de Desarrollo
+
+## Estrategia de ramas (Git)
+
+**Modelo de ramas:**
+- `main` → Solo versiones **estables**.
+- `develop` → Rama de integración de **features**.
+- `feature/` → Ramas de trabajo creadas desde `develop`.
+
+**Convenciones de nombres:**
+- Formato: `feature/<idTarea>`
+- Ejemplo: `feature/1234-login-con-jwt`
+
+## Reglas de Merge
+
+- **Hacia develop**:
+  - Pull Request (PR) obligatorio.
+  - Estrategia: **Squash & Merge**.
+
+- **Hacia main**:
+  - Solo permitido desde `develop`.
+
+## Convención de nombres
+
+- **Namespaces / Tipos** (clases, structs, enums, records): `PascalCase`
+- **Interfaces**: `I` + `PascalCase` → `IUserRepository`
+- **Métodos públicos / Propiedades / Eventos**: `PascalCase`
+- **Parámetros / Variables locales**: `camelCase`
+- **Campos privados**: `_camelCase` (con guion bajo) → `_context`
+- **Constantes**: `UPPER_SNAKE_CASE`
+
+
+## Carpetas y archivos
+
+- **Solución**: `WordRush.sln`
+
+### Proyectos
+- `WordRush.Core`
+- `WordRush.Infrastructure`
+- `WordRush.Web`
+- `WordRush.Tests`
+
+### Convención de sufijos de proyectos
+- `.Web` → API
+- `.Infrastructure`
+- `.Core`
+- `.Tests`
+
+## Rutas API
+
+- **Base path versionado**: `/api/v1/...`
+
+### Convenciones
+- **Recursos**: plural, minúsculas, `kebab-case` si hay varias palabras.
+  - Ejemplos:
+    - `/api/v1/todos`
+    - `/api/v1/user-profiles`
+
+- **Identificadores**: en la ruta
+  - Ejemplo: `/api/v1/todos/{id}`
+
+- **Sub-recursos**:
+  - Ejemplo: `/api/v1/users/{id}/reservations`
+
+- **Acciones no-CRUD**: usar **verbo** como subruta
+  - Ejemplos:
+    - `POST /api/v1/payments/{id}/capture`
+    - `POST /api/v1/users/{id}/activate`
+
+## Entidades, DTOs y EF Core
+
+### Entidades (Dominio)
+- **Clases en singular**: `Todo`, `User`
+- **Propiedades**: `PascalCase` → Ej.: `Id`, `Title`
+- **Evitar sufijos innecesarios**: usar `Todo` en lugar de `TodoEntity`
+
+### DbContext
+- **DbSet en plural**:
+
+```csharp
+public DbSet<Todo> Todos { get; set; }
+```
+
+---
+## ⚙️ Pipelines CI/CD
+
+- Los **pipelines** se ejecutan automáticamente **cuando se realiza un `push` en cualquier rama**.
+- El flujo incluye las siguientes etapas:
+
+1. **Set up job**
+2. **Checkout code**
+3. **Setup .NET**
+4. **Restore dependencies**
+5. **Build**
+6. **Run tests**
+7. **Post Setup .NET**
+8. **Post Checkout code**
+9. **Complete job**
+---
+
 ## ⚙️ Setup local
 
 ```bash
@@ -43,3 +144,4 @@ dotnet build
 # Ejecutar API
 dotnet run --project src/Web
 # Swagger: http(s)://localhost:<puerto>/swagger/index.html
+```

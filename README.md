@@ -33,6 +33,8 @@ Comunicación vía **HTTPS** y **JWT**. Habilitar **CORS** para el dominio del c
 
 ---
 
+## TEST
+
 ## ⚙️ Setup local
 
 ```bash
@@ -43,3 +45,4 @@ dotnet build
 # Ejecutar API
 dotnet run --project src/Web
 # Swagger: http(s)://localhost:<puerto>/swagger/index.html
+

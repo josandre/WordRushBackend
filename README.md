@@ -82,7 +82,7 @@ Comunicación vía **HTTPS** y **JWT**. Habilitar **CORS** para el dominio del c
 - `.Core`
 - `.Tests`
 
-## Rutas API
+## Rutas API ooooo
 
 - **Base path versionado**: `/api/v1/...`
 

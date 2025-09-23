@@ -1,7 +1,7 @@
 # 📌 Pull Request
 
 ## 🔗 Issue relacionada
-Closes #<Link de la tarea>
+Closes --Link de la tarea--
 
 ---
 

@@ -213,6 +213,9 @@ dotnet_diagnostic.SA1401.severity = warning
 # Prefix local calls with 'this.'
 dotnet_diagnostic.SA1101.severity = none
 
+# The 'required' modifier should appear before 'public'
+dotnet_diagnostic.SA1206.severity = none
+
 # Block scoped namespace warning
 dotnet_diagnostic.IDE0160.severity = warning
 dotnet_analyzer_diagnostic.category-Style.severity = warning

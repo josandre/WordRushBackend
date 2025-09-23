@@ -1,10 +1,14 @@
+using Microsoft.EntityFrameworkCore;
+using WordRush.Repository;
+
 var builder = WebApplication.CreateBuilder(args);
+var services = builder.Services;
 
-builder.Services.AddHealthChecks();
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
+services.AddHealthChecks();
+services.AddControllers();
+services.AddEndpointsApiExplorer();
 
-builder.Services.AddSwaggerGen(options =>
+services.AddSwaggerGen(options =>
 {
   var xmlFilename = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
   options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
@@ -12,12 +16,21 @@ builder.Services.AddSwaggerGen(options =>
 
 var myAllowSpecificOrigins = "_myAllowSpecificOrigins";
 
-builder.Services.AddCors(options =>
+services.AddCors(options =>
 {
   options.AddPolicy(
     myAllowSpecificOrigins,
     policy => { policy.WithOrigins("*").AllowAnyHeader().AllowAnyMethod(); });
 });
+
+if (builder.Environment.IsDevelopment())
+{
+  builder.Configuration.AddUserSecrets<Program>(optional: true, reloadOnChange: true);
+}
+
+var connection = builder.Configuration.GetConnectionString("WordRushDb");
+
+services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connection));
 
 var app = builder.Build();
 

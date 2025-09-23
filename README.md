@@ -73,6 +73,8 @@ Comunicación vía **HTTPS** y **JWT**. Habilitar **CORS** para el dominio del c
 ### Proyectos
 - `WordRush.Core`
 - `WordRush.Infrastructure`
+- `WordRush.Migrations`
+- `WordRush.Repository`
 - `WordRush.Web`
 - `WordRush.Tests`
 
@@ -116,6 +118,35 @@ Comunicación vía **HTTPS** y **JWT**. Habilitar **CORS** para el dominio del c
 ```csharp
 public DbSet<Todo> Todos { get; set; }
 ```
+
+## 🗄️ Running Migrations
+
+### Setup
+Entity Framework migrations rely on the `DOTNET_ENVIRONMENT` variable.  
+By default, `dotnet run` assumes **Production**, so user secrets will not be loaded unless we force the environment to **Development**.
+
+#### macOS / Linux (bash or zsh)
+
+1. Open your shell profile (`~/.zshrc` or `~/.bashrc` depending on your shell).
+2. Add the following line:
+
+   ```bash
+   export DOTNET_ENVIRONMENT=Development
+3. Reload your shell config `source ~/.zshrc` or `source ~/.bashrc` 
+
+#### Powershell
+1. Execute in your powershell `setx DOTNET_ENVIRONMENT "Development"`
+
+After this, from the repository root go to on `src/Web`, and execute `dotnet user-secrets set "ConnectionStrings:WordRushDb" "<connection-string>"`
+
+### Adding Migrations
+1. From the repository root move to `src/Migrations`
+2. Execute `dotnet ef migrations add <MigrationName>`
+
+### Running Migrations
+
+1. From the repository root move to `src/Migrations`
+2. Execute `dotnet run`
 
 ---
 ## ⚙️ Pipelines CI/CD

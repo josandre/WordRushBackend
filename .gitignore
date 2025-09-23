@@ -131,3 +131,5 @@ appsettings.*.local.json
 # Frontend embebido (si el backend sirve UI)
 ########################
 **/wwwroot/node_modules/
+
+.DS_Store

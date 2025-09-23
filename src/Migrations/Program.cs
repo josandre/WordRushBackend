@@ -30,7 +30,7 @@ services.AddDbContext<AppDbContext>(options => options.UseNpgsql(
 
 IServiceProvider provider = services.BuildServiceProvider();
 
-using (var context = (AppDbContext)provider.GetService(typeof(AppDbContext)))
+using (var context = (AppDbContext)provider.GetService(typeof(AppDbContext))!)
 {
   context?.Database.Migrate();
 }

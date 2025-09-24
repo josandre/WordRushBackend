@@ -1,5 +1,8 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using WordRush.Core.Infrastructure.Identity;
 using WordRush.Repository;
+using WordRush.Repository.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 var services = builder.Services;
@@ -31,6 +34,37 @@ if (builder.Environment.IsDevelopment())
 var connection = builder.Configuration.GetConnectionString("WordRushDb");
 
 services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connection));
+
+
+builder.Services.AddDataProtection();
+
+var identityBuilder = builder.Services
+  .AddIdentityCore<User>(
+    o =>
+    {
+      o.Password.RequireDigit = true;
+      o.Password.RequiredLength = 8;
+      o.Password.RequireLowercase = true;
+      o.Password.RequireUppercase = true;
+      o.Password.RequireNonAlphanumeric = false;
+
+      o.User.AllowedUserNameCharacters = null!;
+      o.SignIn.RequireConfirmedEmail = false;
+    });
+
+identityBuilder
+  .AddRoles<Role>()
+  .AddEntityFrameworkStores<AppDbContext>()
+  .AddDefaultTokenProviders();
+
+builder.Services
+  .Configure<PasswordHasherOptions>(o => o.IterationCount = 30_000)
+  .AddHttpContextAccessor()
+  .AddScoped<SignInManager<User>, SignInManager<User>>();
+
+builder.Services
+  .AddScoped<IAuthService, AuthService>();
+
 
 var app = builder.Build();
 

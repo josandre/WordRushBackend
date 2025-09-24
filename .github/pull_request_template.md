@@ -1,12 +1,12 @@
 # 📌 Pull Request
 
-## 🔗 Issue relacionada
-Closes --Link de la tarea--
+## 🔗 Related Issue
+Closes --Task link--
 
 ---
 
-## 📝 Descripción
-Explica brevemente qué cambios introduce este PR
+## 📝 Description
+Briefly explain what changes this PR introduces:
 
 -
 -
@@ -14,17 +14,17 @@ Explica brevemente qué cambios introduce este PR
 ---
 
 ## ✅ Checklist
-- [ ] La rama sigue la convención: `feature/<idTarea>-<slug>`
-- [ ] El código cumple las **convenciones de nombres** (PascalCase, camelCase, etc.)
-- [ ] Se agregaron/actualizaron pruebas unitarias si aplica
-- [ ] El pipeline CI/CD pasó todas las etapas con éxito
-- [ ] Al menos un integrante del equipo revisó el código
+- [ ] Branch follows the convention: `feature/<idTarea>-<slug>`
+- [ ] Code follows the naming conventions (PascalCase, camelCase, etc.)
+- [ ] Unit tests were added/updated if applicable
+- [ ] CI/CD pipeline passed all stages successfully
+- [ ] At least one team member reviewed the code
 
 
-## 📸 Evidencia
-Agrega capturas de pantalla o logs si aplica
+## 📸 Evidence
+Add screenshots or logs if applicable.
 
 ---
 
-## 🔍 Notas adicionales
-Cualquier detalle extra a considerar
+## 🔍 Additional Notes
+Any extra details to consider.

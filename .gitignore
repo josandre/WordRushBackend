@@ -17,9 +17,9 @@
 ########################
 # Carpetas de IDE
 ########################
-.vs/                       # Visual Studio
-.vscode/                   # VS Code (ignora config local del dev)
-.idea/                     # JetBrains Rider
+.vs/
+.vscode/
+.idea/
 *.sln.iml
 
 ########################

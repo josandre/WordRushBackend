@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using WordRush.Repository;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -7,6 +8,9 @@ IServiceCollection services = builder.Services;
 services.AddHealthChecks();
 services.AddControllers();
 services.AddEndpointsApiExplorer();
+
+Log.Logger = new LoggerConfiguration()
+  .ReadFrom.Configuration(builder.Configuration).CreateLogger();
 
 services.AddSwaggerGen(options =>
 {
@@ -32,6 +36,8 @@ string? connection = builder.Configuration.GetConnectionString("WordRushDb");
 
 services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connection));
 
+builder.Host.UseSerilog();
+
 WebApplication app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -39,7 +45,7 @@ if (app.Environment.IsDevelopment())
   _ = app.UseSwagger();
   _ = app.UseSwaggerUI();
 }
-
+app.UseSerilogRequestLogging();
 app.UseCors(myAllowSpecificOrigins);
 app.UseHttpsRedirection();
 app.UseAuthorization();

@@ -1,0 +1,5 @@
+@rootURL = http://localhost:5178
+
+GET {{rootURL}}/api/games
+Accept: application/json
+###

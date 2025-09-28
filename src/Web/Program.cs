@@ -45,6 +45,7 @@ if (app.Environment.IsDevelopment())
   _ = app.UseSwagger();
   _ = app.UseSwaggerUI();
 }
+
 app.UseSerilogRequestLogging();
 app.UseCors(myAllowSpecificOrigins);
 app.UseHttpsRedirection();

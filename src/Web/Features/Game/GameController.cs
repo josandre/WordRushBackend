@@ -26,7 +26,7 @@ namespace WordRush.Web.Features.Game
 
       Task<ActionResult<List<GameResponse>>> taskResult = Task.FromResult<ActionResult<List<GameResponse>>>(Ok(result));
 
-      Log.Information("Game Dummy Result => {@taskResult}", taskResult);
+      Log.Information(messageTemplate: "Game Dummy Result => {@TaskResult}", taskResult);
 
       return taskResult;
     }

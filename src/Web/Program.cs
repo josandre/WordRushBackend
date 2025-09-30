@@ -1,5 +1,10 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using WordRush.Core.Features;
 using WordRush.Core.Infrastructure.Identity;
 using WordRush.Repository;
 using WordRush.Repository.Models;
@@ -15,7 +20,55 @@ services.AddSwaggerGen(options =>
 {
   var xmlFilename = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
   options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
+
+  options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+  {
+    Name = "Authorization",
+    Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+    Scheme = "Bearer",
+    BearerFormat = "JWT",
+    In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+    Description = "Enter 'Bearer' [space] and then your valid token.\n\nExample: \"Bearer eyJhbGciOiJI...\""
+  });
+
+  options.AddSecurityRequirement(new OpenApiSecurityRequirement
+  {
+    {
+      new OpenApiSecurityScheme
+      {
+        Reference = new OpenApiReference
+        {
+          Type = ReferenceType.SecurityScheme,
+          Id = "Bearer"
+        }
+      },
+      []
+    }
+  });
 });
+
+var jwtKey = builder.Configuration["Jwt:Secret"];
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+
+services.AddAuthentication(options =>
+  {
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+  })
+  .AddJwtBearer(options =>
+  {
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+      ValidateIssuer = true,
+      ValidateAudience = true,
+      ValidateLifetime = true,
+      ValidateIssuerSigningKey = true,
+
+      ValidIssuer = jwtIssuer,
+      ValidAudience = jwtIssuer,
+      IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+    };
+  });
 
 var myAllowSpecificOrigins = "_myAllowSpecificOrigins";
 
@@ -63,7 +116,8 @@ builder.Services
   .AddScoped<SignInManager<User>, SignInManager<User>>();
 
 builder.Services
-  .AddScoped<IAuthService, AuthService>();
+  .AddScoped<IAuthService, AuthService>()
+  .AddScoped<IRoleService, RoleService>();
 
 
 var app = builder.Build();
@@ -76,6 +130,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors(myAllowSpecificOrigins);
 app.UseHttpsRedirection();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

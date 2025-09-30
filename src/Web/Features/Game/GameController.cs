@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using WordRush.Web.Features.Game.Data;
@@ -6,6 +7,7 @@ namespace WordRush.Web.Features.Game;
 
 [EnableCors]
 [ApiController]
+[Authorize]
 [Route("api/games")]
 public class GameController : ControllerBase
 {

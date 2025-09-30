@@ -2,21 +2,28 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using WordRush.Core.Features;
 using WordRush.Core.Infrastructure.Identity.Models;
+using WordRush.Repository;
 using WordRush.Repository.Models;
 
 namespace WordRush.Core.Infrastructure.Identity;
 
 public class AuthService : IAuthService
 {
+  private readonly IRoleService _roleService;
   private readonly UserManager<User> _userManager;
-  private readonly string _issuer = "wordsRush";
-  private readonly string _key = "wordsRush"; //TODO : Change to a user secret
+  private readonly string _issuer;
+  private readonly string _key;
 
-  public AuthService(UserManager<User> userManager)
+  public AuthService(UserManager<User> userManager, IRoleService roleService, IConfiguration config)
   {
     _userManager = userManager;
+    _roleService = roleService;
+    _issuer = config["Jwt:Issuer"];
+    _key = config["Jwt:Secret"];
   }
 
   public async Task<LoginResponse> Login(User user)
@@ -37,8 +44,8 @@ public class AuthService : IAuthService
       new(ClaimTypes.NameIdentifier, user.Id.ToString())
     };
 
-    var roles = await _userManager.GetRolesAsync(user);
-    claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
+    var role = await _roleService.GetRoleById(user.RoleId);
+    claims.Add(new Claim(ClaimTypes.Role, role.Name));
 
     var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_key));
     var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

@@ -4,9 +4,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Serilog;
 using WordRush.Core.Features;
 using WordRush.Core.Infrastructure.Identity;
-using Serilog;
 using WordRush.Repository;
 using WordRush.Repository.Models;
 
@@ -28,10 +28,10 @@ services.AddSwaggerGen(options =>
   options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
   {
     Name = "Authorization",
-    Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+    Type = SecuritySchemeType.ApiKey,
     Scheme = "Bearer",
     BearerFormat = "JWT",
-    In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+    In = ParameterLocation.Header,
     Description = "Enter 'Bearer' [space] and then your valid token.\n\nExample: \"Bearer eyJhbGciOiJI...\""
   });
 
@@ -92,7 +92,6 @@ string? connection = builder.Configuration.GetConnectionString("WordRushDb");
 
 services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connection));
 
-
 builder.Services.AddDataProtection();
 
 var identityBuilder = builder.Services
@@ -115,49 +114,19 @@ identityBuilder
   .AddDefaultTokenProviders();
 
 builder.Services
-  .Configure<PasswordHasherOptions>(o => o.IterationCount = 30_000)
+  .Configure<PasswordHasherOptions>(o => o.IterationCount = 300_000)
   .AddHttpContextAccessor()
   .AddScoped<SignInManager<User>, SignInManager<User>>();
 
 builder.Services
   .AddScoped<IAuthService, AuthService>()
   .AddScoped<IRoleService, RoleService>();
-
-
 
 builder.Services.AddDataProtection();
-
-var identityBuilder = builder.Services
-  .AddIdentityCore<User>(
-    o =>
-    {
-      o.Password.RequireDigit = true;
-      o.Password.RequiredLength = 8;
-      o.Password.RequireLowercase = true;
-      o.Password.RequireUppercase = true;
-      o.Password.RequireNonAlphanumeric = false;
-
-      o.User.AllowedUserNameCharacters = null!;
-      o.SignIn.RequireConfirmedEmail = false;
-    });
-
-identityBuilder
-  .AddRoles<Role>()
-  .AddEntityFrameworkStores<AppDbContext>()
-  .AddDefaultTokenProviders();
-
-builder.Services
-  .Configure<PasswordHasherOptions>(o => o.IterationCount = 30_000)
-  .AddHttpContextAccessor()
-  .AddScoped<SignInManager<User>, SignInManager<User>>();
-
-builder.Services
-  .AddScoped<IAuthService, AuthService>()
-  .AddScoped<IRoleService, RoleService>();
 
 builder.Host.UseSerilog();
 
-WebApplication app = builder.Build();
+var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {

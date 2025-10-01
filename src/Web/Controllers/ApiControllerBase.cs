@@ -2,7 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 
-namespace WordRush.Web.controllers;
+namespace WordRush.Web.Controllers;
 
 public class ApiControllerBase: ControllerBase
 {

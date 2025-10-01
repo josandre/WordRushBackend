@@ -6,19 +6,23 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using WordRush.Core.Features;
 using WordRush.Core.Infrastructure.Identity;
+using Serilog;
 using WordRush.Repository;
 using WordRush.Repository.Models;
 
-var builder = WebApplication.CreateBuilder(args);
-var services = builder.Services;
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+IServiceCollection services = builder.Services;
 
 services.AddHealthChecks();
 services.AddControllers();
 services.AddEndpointsApiExplorer();
 
+Log.Logger = new LoggerConfiguration()
+  .ReadFrom.Configuration(builder.Configuration).CreateLogger();
+
 services.AddSwaggerGen(options =>
 {
-  var xmlFilename = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+  string xmlFilename = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
   options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
 
   options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -76,15 +80,15 @@ services.AddCors(options =>
 {
   options.AddPolicy(
     myAllowSpecificOrigins,
-    policy => { policy.WithOrigins("*").AllowAnyHeader().AllowAnyMethod(); });
+    policy => { _ = policy.WithOrigins("*").AllowAnyHeader().AllowAnyMethod(); });
 });
 
 if (builder.Environment.IsDevelopment())
 {
-  builder.Configuration.AddUserSecrets<Program>(optional: true, reloadOnChange: true);
+  _ = builder.Configuration.AddUserSecrets<Program>(optional: true, reloadOnChange: true);
 }
 
-var connection = builder.Configuration.GetConnectionString("WordRushDb");
+string? connection = builder.Configuration.GetConnectionString("WordRushDb");
 
 services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connection));
 
@@ -120,14 +124,48 @@ builder.Services
   .AddScoped<IRoleService, RoleService>();
 
 
-var app = builder.Build();
+
+builder.Services.AddDataProtection();
+
+var identityBuilder = builder.Services
+  .AddIdentityCore<User>(
+    o =>
+    {
+      o.Password.RequireDigit = true;
+      o.Password.RequiredLength = 8;
+      o.Password.RequireLowercase = true;
+      o.Password.RequireUppercase = true;
+      o.Password.RequireNonAlphanumeric = false;
+
+      o.User.AllowedUserNameCharacters = null!;
+      o.SignIn.RequireConfirmedEmail = false;
+    });
+
+identityBuilder
+  .AddRoles<Role>()
+  .AddEntityFrameworkStores<AppDbContext>()
+  .AddDefaultTokenProviders();
+
+builder.Services
+  .Configure<PasswordHasherOptions>(o => o.IterationCount = 30_000)
+  .AddHttpContextAccessor()
+  .AddScoped<SignInManager<User>, SignInManager<User>>();
+
+builder.Services
+  .AddScoped<IAuthService, AuthService>()
+  .AddScoped<IRoleService, RoleService>();
+
+builder.Host.UseSerilog();
+
+WebApplication app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-  app.UseSwagger();
-  app.UseSwaggerUI();
+  _ = app.UseSwagger();
+  _ = app.UseSwaggerUI();
 }
 
+app.UseSerilogRequestLogging();
 app.UseCors(myAllowSpecificOrigins);
 app.UseHttpsRedirection();
 app.UseAuthentication();

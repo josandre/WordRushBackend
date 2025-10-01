@@ -1,76 +1,75 @@
 # WordRushBackend
 
 
-API REST en **ASP.NET Core** con arquitectura **MVC**, acceso a datos con **EF Core (PostgreSQL/Neon)**, documentación **Swagger** y autenticación **JWT**.
-
+REST API in ASP.NET Core with MVC architecture, data access using EF Core (PostgreSQL/Neon), Swagger documentation, and JWT authentication.
 ---
 
-## 🏗️ Arquitectura y decisiones
+## 🏗️ Architecture and Decisions
 
-### Arquitectura general (Cliente ⇒ Servidor)
-**Cliente (React Native)** ⟶ **Servidor (API .NET)** ⟶ **Base de Datos (PostgreSQL/Neon)**  
-Comunicación vía **HTTPS** y **JWT**. Habilitar **CORS** para el dominio del cliente.
+### General Architecture (Client ⇒ Server)
+Client (React Native) ⟶ Server (API .NET) ⟶ Database (PostgreSQL/Neon)
+Communication via HTTPS and JWT. Enable CORS for the client domain.
 
-### Arquitectura interna (MVC + Capas)
-- **Core**: Entidades de dominio e interfaces.
-- **Infrastructure**: `DbContext` (EF Core), repositorios, migraciones.
-- **Web**: Controllers, DTOs, mapeos, Swagger, Auth/CORS.
+### Internal Architecture (MVC + Layers)
+- **Core**: Domain entities and interfaces.
+- **Infrastructure**: `DbContext` (EF Core), repositories, migrations.
+- **Web**: Controllers, DTOs, mappings, Swagger, Auth/CORS.
 
-**Decisiones BE**
-- **DB**: Neon (PostgreSQL, SSL requerido).
+**Backend Decisions**
+- **DB**: Neon (PostgreSQL, SSL required).
 - **ORM**: EF Core + Npgsql.
 - **Auth**: JWT Bearer.
 - **Docs**: Swagger/Swashbuckle.
-- **Migraciones**: `dotnet ef` desde `Infrastructure` con *startup project* `Web`.
+- **Migraciones**: `dotnet ef` from `Infrastructure` with *startup project* `Web`.
 
 ---
 
-## ✅ Requisitos previos
+## ✅ Prerequisites
 - .NET 7/8 SDK
-- PostgreSQL (Neon) con cadena de conexión válida
+- PostgreSQL (Neon) with a valid connection string
 - Git, GitHub
 - Git Hub Actions
 
 ---
 
 
-# 📐 Estándares de Desarrollo
+# 📐 Development Standards
 
-## Estrategia de ramas (Git)
+## Branching Strategy (Git)
 
 **Modelo de ramas:**
-- `main` → Solo versiones **estables**.
-- `develop` → Rama de integración de **features**.
-- `feature/` → Ramas de trabajo creadas desde `develop`.
+- `main` → Only stable releases are merged here.
+- `develop` → Integration branch where features are merged before release.
+- `feature/` → Created from develop, follow the convention:
 
-**Convenciones de nombres:**
-- Formato: `feature/<idTarea>`
-- Ejemplo: `feature/1234-login-con-jwt`
+**Name conventions:**
+- Format: `feature/<idTarea>`
+- Example: `feature/1234-login-con-jwt`
 
-## Reglas de Merge
+## Merge Rules
 
-- **Hacia develop**:
-  - Pull Request (PR) obligatorio.
-  - Estrategia: **Squash & Merge**.
+- **To develop**:
+  - Pull Request (PR) mandatory.
+  - Strategy: **Squash & Merge**.
 
-- **Hacia main**:
-  - Solo permitido desde `develop`.
+- **To main**:
+  - Just allow from `develop`.
 
-## Convención de nombres
+## Name convention
 
-- **Namespaces / Tipos** (clases, structs, enums, records): `PascalCase`
+- **Namespaces / Types** (clases, structs, enums, records): `PascalCase`
 - **Interfaces**: `I` + `PascalCase` → `IUserRepository`
-- **Métodos públicos / Propiedades / Eventos**: `PascalCase`
-- **Parámetros / Variables locales**: `camelCase`
-- **Campos privados**: `_camelCase` (con guion bajo) → `_context`
-- **Constantes**: `UPPER_SNAKE_CASE`
+- **Public methods / Properties / Events**: `PascalCase`
+- **Parameters / Local variables**: `camelCase`
+- **Private properties**: `_camelCase` (con guion bajo) → `_context`
+- **Constants**: `UPPER_SNAKE_CASE`
 
 
-## Carpetas y archivos
+## Directories y files
 
-- **Solución**: `WordRush.sln`
+- **Solution**: `WordRush.sln`
 
-### Proyectos
+### Projects
 - `WordRush.Core`
 - `WordRush.Infrastructure`
 - `WordRush.Migrations`
@@ -78,42 +77,42 @@ Comunicación vía **HTTPS** y **JWT**. Habilitar **CORS** para el dominio del c
 - `WordRush.Web`
 - `WordRush.Tests`
 
-### Convención de sufijos de proyectos
+### Project Suffix Convention
 - `.Web` → API
 - `.Infrastructure`
 - `.Core`
 - `.Tests`
 
-## Rutas API
+## API Routes
 
-- **Base path versionado**: `/api/v1/...`
+- **Base path**: `/api/v1/...`
 
-### Convenciones
-- **Recursos**: plural, minúsculas, `kebab-case` si hay varias palabras.
-  - Ejemplos:
+### Conventions
+- **Resources**: Use plural, lowercase, `kebab-case` for multiple words.
+  - Examples:
     - `/api/v1/todos`
     - `/api/v1/user-profiles`
 
-- **Identificadores**: en la ruta
-  - Ejemplo: `/api/v1/todos/{id}`
+- **Identifiers**: Placed directly in the route
+  - Example: `/api/v1/todos/{id}`
 
-- **Sub-recursos**:
-  - Ejemplo: `/api/v1/users/{id}/reservations`
+- **Sub-resources**:
+  - Example: `/api/v1/users/{id}/reservations`
 
-- **Acciones no-CRUD**: usar **verbo** como subruta
-  - Ejemplos:
+- **Not-CRUD Actions**: use a **verb** as a sub-route.
+  - Examples:
     - `POST /api/v1/payments/{id}/capture`
     - `POST /api/v1/users/{id}/activate`
 
-## Entidades, DTOs y EF Core
+## Entities, DTOs y EF Core
 
-### Entidades (Dominio)
+### Entities 
 - **Clases en singular**: `Todo`, `User`
-- **Propiedades**: `PascalCase` → Ej.: `Id`, `Title`
-- **Evitar sufijos innecesarios**: usar `Todo` en lugar de `TodoEntity`
+- **Properties**: `PascalCase` → Ej.: `Id`, `Title`
+- **Do not use unnecesary suffixes**: use `Todo` instead of `TodoEntity`
 
 ### DbContext
-- **DbSet en plural**:
+- **DbSet in plural**:
 
 ```csharp
 public DbSet<Todo> Todos { get; set; }
@@ -151,8 +150,8 @@ After this, from the repository root go to on `src/Web`, and execute `dotnet use
 ---
 ## ⚙️ Pipelines CI/CD
 
-- Los **pipelines** se ejecutan automáticamente **cuando se realiza un `push` en cualquier rama**.
-- El flujo incluye las siguientes etapas:
+- The **pipelines** are executed automatically **when a `push` is made to any branch.**.
+- The workflow includes the following stages:
 
 1. **Set up job**
 2. **Checkout code**
@@ -168,11 +167,11 @@ After this, from the repository root go to on `src/Web`, and execute `dotnet use
 ## ⚙️ Setup local
 
 ```bash
-# Restaurar y compilar
+# Restore and build
 dotnet restore
 dotnet build
 
-# Ejecutar API
+# Run API
 dotnet run --project src/Web
-# Swagger: http(s)://localhost:<puerto>/swagger/index.html
+# Swagger: http(s)://localhost:<port>/swagger/index.html
 ```

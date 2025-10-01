@@ -1,21 +1,21 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using WordRush.Repository.Models;
 
-namespace WordRush.Repository;
-
-public class AppDbContext : DbContext
+namespace WordRush.Repository
 {
-  public AppDbContext()
+  public class AppDbContext : DbContext
   {
-  }
+    public AppDbContext()
+    {
+    }
 
-  public AppDbContext(DbContextOptions<AppDbContext> options)
-    : base(options)
-  {
-  }
+    public AppDbContext(DbContextOptions<AppDbContext> options)
+        : base(options)
+    {
+    }
 
-  public DbSet<Game> Games { get; set; }
+    public DbSet<Game> Games { get; set; }
 
   public DbSet<Privilege> Privileges { get; set; }
 
@@ -23,20 +23,21 @@ public class AppDbContext : DbContext
 
   public DbSet<Role> Roles { get; set; }
 
-  protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-  {
-    if (!optionsBuilder.IsConfigured)
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-      var configuration = new ConfigurationBuilder()
-        .SetBasePath(Path.Combine(Directory.GetCurrentDirectory(), "..", "Web"))
-        .AddJsonFile("appsettings.json")
-        .Build();
+      if (!optionsBuilder.IsConfigured)
+      {
+        IConfigurationRoot configuration = new ConfigurationBuilder()
+          .SetBasePath(Path.Combine(Directory.GetCurrentDirectory(), "..", "Web"))
+          .AddJsonFile("appsettings.json")
+          .Build();
 
-      var connectionString = configuration.GetConnectionString("WordRushDb");
+        string? connectionString = configuration.GetConnectionString("WordRushDb");
 
-      optionsBuilder.UseNpgsql(
-        connectionString,
-        x => x.MigrationsAssembly("WordRush.Migrations"));
+        _ = optionsBuilder.UseNpgsql(
+          connectionString,
+          x => x.MigrationsAssembly("WordRush.Migrations"));
+      }
     }
   }
 }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
+using Serilog;
 using WordRush.Web.Features.Game.Data;
 
 namespace WordRush.Web.Features.Game;
@@ -20,11 +21,16 @@ public class GameController : ControllerBase
     public Task<ActionResult<List<GameResponse>>> Get()
     {
       List<GameResponse> result =
-      [
-        new() { Id = 1, Name = "Dummy game 1" },
+        [
+          new() { Id = 1, Name = "Dummy game 1" },
         new() { Id = 1, Name = "Dummy game 2" }
-      ];
+        ];
 
-      return Task.FromResult<ActionResult<List<GameResponse>>>(Ok(result));
+      Task<ActionResult<List<GameResponse>>> taskResult = Task.FromResult<ActionResult<List<GameResponse>>>(Ok(result));
+
+      Log.Information(messageTemplate: "Game Dummy Result => {@TaskResult}", taskResult);
+
+      return taskResult;
     }
+  }
 }

@@ -122,6 +122,8 @@ builder.Services
   .AddScoped<IAuthService, AuthService>()
   .AddScoped<IRoleService, RoleService>();
 
+builder.Services.AddScoped<IProfileService, ProfileService>();
+
 builder.Services.AddDataProtection();
 
 builder.Host.UseSerilog();

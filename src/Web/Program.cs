@@ -120,10 +120,9 @@ builder.Services
 
 builder.Services
   .AddScoped<IAuthService, AuthService>()
-  .AddScoped<IRoleService, RoleService>();
-
+  .AddScoped<IRoleService, RoleService>()
+  .AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
-
 builder.Services.AddDataProtection();
 
 builder.Host.UseSerilog();

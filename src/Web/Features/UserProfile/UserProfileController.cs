@@ -42,16 +42,21 @@ namespace WordRush.Web.Features.UserProfile
 
     [HttpPut("update-profile")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UserProfile))]
-    public async Task<ActionResult<UserProfile?>> UpdateUserProfile(int id, string nickname, string avatar, string email, string password)
+    public async Task<ActionResult<UserProfile?>> UpdateUserProfile([FromBody] UserProfile profile)
     {
-      bool isEmail = new EmailAddressAttribute().IsValid(email);
-
-      if (!isEmail || id <= 0 || string.IsNullOrWhiteSpace(nickname) || string.IsNullOrWhiteSpace(avatar))
+      if (!ModelState.IsValid)
       {
-        return null;
+        return BadRequest(ModelState);
       }
 
-      User? user = await profileService.UpdateUserProfile(id, nickname, avatar, email, password);
+      bool isEmail = new EmailAddressAttribute().IsValid(profile.Email);
+
+      if (!isEmail || profile.Id <= 0 || string.IsNullOrWhiteSpace(profile.Nickname) || string.IsNullOrWhiteSpace(profile.Avatar))
+      {
+        return BadRequest();
+      }
+
+      User? user = await profileService.UpdateUserProfile(profile.Id, profile.Nickname, profile.Avatar, profile.Email, profile.Password);
 
       UserProfile userProfile = new();
       if (user != null)

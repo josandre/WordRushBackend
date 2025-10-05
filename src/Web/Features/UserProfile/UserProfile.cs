@@ -18,5 +18,7 @@ namespace WordRush.Web.Features.UserProfile
 
     [MaxLength(2048)]
     public string? Avatar { get; set; }
+
+    public string? Password { get; set; }
   }
 }

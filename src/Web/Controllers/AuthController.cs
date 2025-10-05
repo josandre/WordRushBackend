@@ -12,13 +12,8 @@ using WordRush.Web.Models;
 namespace WordRush.Web.Controllers
 {
   [Route("auth")]
-  public class AuthController(SignInManager<User> signInManager, IAuthService authService, UserManager<User> userManager, IRoleService roleService) : ApiControllerBase
+  public class AuthController(SignInManager<User> signInManager, IAuthService authService, UserManager<User> userManager, IRoleService roleService, IUserService userService) : ApiControllerBase
   {
-    private readonly SignInManager<User> signInManager = signInManager;
-    private readonly UserManager<User> userManager = userManager;
-    private readonly IAuthService authService = authService;
-    private readonly IRoleService roleService = roleService;
-
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<ActionResult<LoginResponse>> SignIn([FromBody] LoginRequest request)
@@ -48,6 +43,13 @@ namespace WordRush.Web.Controllers
     [AllowAnonymous]
     public async Task<ActionResult<SignUpResponse>> SignUp([FromBody] SignUpRequest request)
     {
+      bool userExists = await userService.GetUserByEmail(request.Email);
+
+      if (userExists)
+      {
+        return BadRequest("Email already exists");
+      }
+
       User user = await CreateUserFromRequest(request);
       IdentityResult response = await userManager.CreateAsync(user, request.Password);
 

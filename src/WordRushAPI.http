@@ -3,3 +3,11 @@
 GET {{rootURL}}/api/games
 Accept: application/json
 ###
+
+POST {{rootURL}}/auth/login
+Content-Type: application/json
+{
+  "email": "tovar@gmail.com",
+  "password": "NewPassword1"
+}
+###

@@ -14,7 +14,7 @@ namespace WordRush.Web.Features.UserProfile
   {
     private readonly IProfileService profileService = profileService;
 
-    [HttpGet("getProfile")]
+    [HttpGet("get-profile")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UserProfile))]
     public async Task<ActionResult<UserProfile?>> GetUserProfile(string userEmail)
     {
@@ -36,7 +36,34 @@ namespace WordRush.Web.Features.UserProfile
         userProfile.Avatar = user.Avatar;
       }
 
-      Log.Information(messageTemplate: "Get User Service Result => {@User}", userProfile);
+      Log.Information(messageTemplate: "\nGet User Profile Service Result => {@User}", userProfile);
+      return userProfile;
+    }
+
+    [HttpPut("update-profile")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UserProfile))]
+    public async Task<ActionResult<UserProfile?>> UpdateUserProfile(int id, string nickname, string avatar, string email, string password)
+    {
+      bool isEmail = new EmailAddressAttribute().IsValid(email);
+
+      if (!isEmail || id <= 0 || string.IsNullOrWhiteSpace(nickname) || string.IsNullOrWhiteSpace(avatar))
+      {
+        return null;
+      }
+
+      User? user = await profileService.UpdateUserProfile(id, nickname, avatar, email, password);
+
+      UserProfile userProfile = new();
+      if (user != null)
+      {
+        userProfile.Id = user.Id;
+        userProfile.RoleId = user.RoleId;
+        userProfile.Email = user.Email;
+        userProfile.Nickname = user.Nickname;
+        userProfile.Avatar = user.Avatar;
+      }
+
+      Log.Information(messageTemplate: "\nUpdate User Service Result => {@User}", userProfile);
       return userProfile;
     }
   }

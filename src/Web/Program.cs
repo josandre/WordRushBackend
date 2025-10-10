@@ -121,8 +121,9 @@ builder.Services
 builder.Services
   .AddScoped<IAuthService, AuthService>()
   .AddScoped<IRoleService, RoleService>()
-  .AddScoped<IUserService, UserService>();
-builder.Services.AddScoped<IProfileService, ProfileService>();
+  .AddScoped<IUserService, UserService>()
+  .AddScoped<IProfileService, ProfileService>();
+
 builder.Services.AddDataProtection();
 
 builder.Host.UseSerilog();
@@ -135,13 +136,12 @@ if (app.Environment.IsDevelopment())
   _ = app.UseSwaggerUI();
 }
 
+app.UseHttpsRedirection();
 app.UseSerilogRequestLogging();
 app.UseCors(myAllowSpecificOrigins);
-app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-
 app.MapHealthChecks("/health");
 
 await app.RunAsync();

@@ -7,29 +7,23 @@ namespace WordRush.Core.Features
 {
   public class ProfileService(SignInManager<User> signInManager, AppDbContext dbContext) : IProfileService, IPasswordHasher<User>
   {
-    private readonly SignInManager<User> _signInManager = signInManager;
-    private readonly AppDbContext _dbContext = dbContext;
-    private readonly PasswordHasher<User> _passwordHasher = new();
+    private readonly PasswordHasher<User> passwordHasher = new();
 
     public async Task<User?> GetUserProfileByEmail(string email)
     {
-      return await _signInManager.UserManager.FindByEmailAsync(email);
+      return await signInManager.UserManager.FindByEmailAsync(email);
     }
 
-    public async Task<User?> UpdateUserProfile(int id, string nickname, string avatar, string email, string password)
+    public async Task<User?> UpdateUserProfile(int id, string nickname, string avatar, string email)
     {
-      User? user = await _dbContext.FindAsync<User>(id);
+      User? user = await dbContext.FindAsync<User>(id);
       if (user != null)
       {
         user.Nickname = nickname;
         user.Avatar = avatar;
         user.Email = email;
-        if (!string.IsNullOrWhiteSpace(password))
-        {
-          user.PasswordHash = HashPassword(user, password);
-        }
 
-        IdentityResult result = await _signInManager.UserManager.UpdateAsync(user);
+        IdentityResult result = await signInManager.UserManager.UpdateAsync(user);
 
         return result.Succeeded ? user : null;
       }
@@ -37,14 +31,38 @@ namespace WordRush.Core.Features
       return null;
     }
 
+    public async Task<bool> ChangeUserPassword(int userId, string currentPassword, string newPassword)
+    {
+      User? user = await dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
+      if (user == null)
+      {
+        return false;
+      }
+
+      // Verify current password
+      PasswordVerificationResult verificationResult = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, currentPassword);
+
+      if (verificationResult == PasswordVerificationResult.Failed)
+      {
+        return false;
+      }
+
+      // Generate new hash and save
+      user.PasswordHash = HashPassword(user, newPassword);
+
+      await dbContext.SaveChangesAsync();
+
+      return true;
+    }
+
     public string HashPassword(User user, string password)
     {
-      return _passwordHasher.HashPassword(user, password);
+      return passwordHasher.HashPassword(user, password);
     }
 
     public PasswordVerificationResult VerifyHashedPassword(User user, string hashedPassword, string providedPassword)
     {
-      return _passwordHasher.VerifyHashedPassword(user, hashedPassword, providedPassword);
+      return passwordHasher.VerifyHashedPassword(user, hashedPassword, providedPassword);
     }
   }
 }

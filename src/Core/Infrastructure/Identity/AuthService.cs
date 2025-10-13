@@ -40,8 +40,9 @@ public class AuthService : IAuthService
   {
     var claims = new List<Claim>
     {
-      new(JwtRegisteredClaimNames.Sub, user.UserName ?? ""),
-      new(ClaimTypes.NameIdentifier, user.Id.ToString())
+      new(JwtRegisteredClaimNames.Sub, user.UserName ?? string.Empty),
+      new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+      new(ClaimTypes.Name, user.UserName ?? string.Empty)
     };
 
     var role = await _roleService.GetRoleById(user.RoleId);

@@ -7,7 +7,6 @@ namespace WordRush.Web.Features.Config;
 
 [EnableCors]
 [ApiController]
-[Authorize]
 [Route("api/config")]
 public class FeatureFlagController(IFeatureFlagService featureFlagService) : ControllerBase
 {
@@ -19,14 +18,7 @@ public class FeatureFlagController(IFeatureFlagService featureFlagService) : Con
   [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IDictionary<string, bool>))]
   public ActionResult<IDictionary<string, bool>> Get()
   {
-    var userKey = HttpContext.User.Identity?.Name;
-
-    if (string.IsNullOrWhiteSpace(userKey))
-    {
-      return BadRequest("User could not be identified");
-    }
-
-    var result = featureFlagService.GetFlags(userKey);
+    var result = featureFlagService.GetFlags("server");
     return Ok(result);
   }
 }

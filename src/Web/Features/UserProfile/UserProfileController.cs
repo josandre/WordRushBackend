@@ -8,7 +8,7 @@ using WordRush.Web.Controllers;
 
 namespace WordRush.Web.Features.UserProfile
 {
-  //[Authorize]
+  [Authorize]
   [Route("api/userProfile")]
   public class UserProfileController(IProfileService profileService) : ApiControllerBase
   {

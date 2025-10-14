@@ -13,7 +13,6 @@ Content-Type: application/json
 ###
 Get {{rootURL}}/api/userProfile/get-profile?userEmail=tovar@gmail.com
 Content-Type: application/json
-{
-  "userEmail": "tovar@gmail.com",  
+{  
 }
 ###

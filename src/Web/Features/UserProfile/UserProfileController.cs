@@ -10,47 +10,40 @@ namespace WordRush.Web.Features.UserProfile
 {
   [Authorize]
   [Route("api/userProfile")]
-  public class UserProfileController(IProfileService profileService) : ApiControllerBase
+  public class UserProfileController(IUserService _userService) : ApiControllerBase
   {
-    private readonly IProfileService profileService = profileService;
+    private readonly IUserService userService = _userService;
 
     [HttpGet("get-profile")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UserProfile))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(User))]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<UserProfile?>> GetUserProfile(string userEmail)
+    public async Task<ActionResult<User?>> GetUserProfile(string userEmail)
     {
       bool isEmail = new EmailAddressAttribute().IsValid(userEmail);
 
       if (!isEmail)
       {
-        return BadRequest();
+        return BadRequest("Bad Request");
       }
 
-      User? user = await profileService.GetUserProfileByEmail(userEmail);
-      UserProfile userProfile = new();
+      User? user = await userService.GetUserProfileByEmail(userEmail);
       if (user != null)
       {
-        userProfile.Id = user.Id;
-        userProfile.RoleId = user.RoleId;
-        userProfile.Email = user.Email;
-        userProfile.Nickname = user.Nickname;
-        userProfile.Avatar = user.Avatar;
+        Log.Information(messageTemplate: "\nGet User Profile Service Result => {@User}", user);
+        return Ok(user);
       }
       else
       {
-        return NotFound("Usuario no encontrado");
+        return NotFound("User not Found!");
       }
-
-      Log.Information(messageTemplate: "\nGet User Profile Service Result => {@User}", userProfile);
-      return Ok(userProfile);
     }
 
     [HttpPut("update-profile")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UserProfile))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(User))]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<UserProfile?>> UpdateUserProfile([FromBody] UserProfile profile)
+    public async Task<ActionResult<User?>> UpdateUserProfile([FromBody] UpdateUserRequest profile)
     {
       if (!ModelState.IsValid)
       {
@@ -61,23 +54,20 @@ namespace WordRush.Web.Features.UserProfile
 
       if (!isEmail || profile.Id <= 0 || string.IsNullOrWhiteSpace(profile.Nickname) || string.IsNullOrWhiteSpace(profile.Avatar))
       {
-        return NotFound("Usuario no encontrado");
+        return NotFound("User not Found!");
       }
 
-      User? user = await profileService.UpdateUserProfile(profile.Id, profile.Nickname, profile.Avatar, profile.Email);
-
-      UserProfile userProfile = new();
+      User? user = await userService.UpdateUserProfile(profile.Id, profile.Nickname, profile.Avatar, profile.Email);
       if (user != null)
       {
-        userProfile.Id = user.Id;
-        userProfile.RoleId = user.RoleId;
-        userProfile.Email = user.Email;
-        userProfile.Nickname = user.Nickname;
-        userProfile.Avatar = user.Avatar;
+        Log.Information(messageTemplate: "\nUpdate User Service Result Failed => {@User}", user);
+        return Ok(user);
       }
-
-      Log.Information(messageTemplate: "\nUpdate User Service Result => {@User}", userProfile);
-      return Ok(userProfile);
+      else
+      {
+        Log.Information(messageTemplate: "\nUpdate User Service Result => {@User}", user);
+        return BadRequest(user);
+      }
     }
 
     [HttpPut("change-password")]
@@ -96,22 +86,22 @@ namespace WordRush.Web.Features.UserProfile
           string.IsNullOrWhiteSpace(request.NewPassword) ||
           string.IsNullOrWhiteSpace(request.ConfirmPassword))
       {
-        return BadRequest("Todos los campos son requeridos.");
+        return BadRequest("All fields are required!");
       }
 
       if (request.NewPassword != request.ConfirmPassword)
       {
-        return BadRequest("Las contraseñas nuevas no coinciden.");
+        return BadRequest("Passwords don't match!");
       }
 
-      bool result = await profileService.ChangeUserPassword(
+      bool result = await userService.ChangeUserPassword(
           request.Id,
           request.CurrentPassword,
           request.NewPassword);
 
       if (!result)
       {
-        return NotFound("Usuario no encontrado o contraseña actual incorrecta.");
+        return NotFound("User not found or Incorrect Password");
       }
 
       Log.Information("Password changed successfully for user {UserId}", request.Id);

@@ -121,8 +121,7 @@ builder.Services
 builder.Services
   .AddScoped<IAuthService, AuthService>()
   .AddScoped<IRoleService, RoleService>()
-  .AddScoped<IUserService, UserService>()
-  .AddScoped<IProfileService, ProfileService>();
+  .AddScoped<IUserService, UserService>();
 
 builder.Services.AddDataProtection();
 

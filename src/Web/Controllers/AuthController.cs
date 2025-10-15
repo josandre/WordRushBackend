@@ -80,6 +80,43 @@ namespace WordRush.Web.Controllers
       return signup;
     }
 
+
+    [HttpPut("reset-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ResetPasswordResponse>> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+      User? user = await userService.GetUserProfileByEmail(request.Email);
+
+      if (user == null)
+      {
+        return NotFound("User not found");
+      }
+
+      var token = await userManager.GeneratePasswordResetTokenAsync(user);
+
+      var response = await userManager.ResetPasswordAsync(user, token, request.NewPassword);
+
+      if (!response.Succeeded)
+      {
+        ResetPasswordResponse resetPasswordResponse = new()
+        {
+          Success = false,
+          Message = string.Join("; ", response.Errors.Select(e => e.Description))
+        };
+
+        return BadRequest(resetPasswordResponse);
+      }
+
+      ResetPasswordResponse resetPassword = new()
+      {
+        Success = true,
+        Message = "Password changed successfully",
+      };
+      Log.Information(messageTemplate: "ResetPassword Service Result => {@Signup}", resetPassword);
+
+      return resetPassword;
+    }
+
     private async Task<User> CreateUserFromRequest(SignUpRequest request)
     {
       Role role = await roleService.GetRoleById(1);

@@ -3,7 +3,7 @@ using WordRush.Repository.Models;
 
 namespace WordRush.Core.Features;
 
-public class RoleService: IRoleService
+public class RoleService : IRoleService
 {
   private readonly AppDbContext _dbContext;
 

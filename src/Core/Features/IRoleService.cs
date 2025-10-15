@@ -1,8 +1,9 @@
 using WordRush.Repository.Models;
 
-namespace WordRush.Core.Features;
-
-public interface IRoleService
+namespace WordRush.Core.Features
 {
-  Task<Role> GetRoleById(int id);
+  public interface IRoleService
+  {
+    Task<Role> GetRoleById(int id);
+  }
 }

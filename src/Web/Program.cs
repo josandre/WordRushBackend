@@ -136,13 +136,12 @@ if (app.Environment.IsDevelopment())
   _ = app.UseSwaggerUI();
 }
 
+app.UseHttpsRedirection();
 app.UseSerilogRequestLogging();
 app.UseCors(myAllowSpecificOrigins);
-app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-
 app.MapHealthChecks("/health");
 
 await app.RunAsync();

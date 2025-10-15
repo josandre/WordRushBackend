@@ -17,11 +17,11 @@ namespace WordRush.Repository
 
     public DbSet<Game> Games { get; set; }
 
-  public DbSet<Privilege> Privileges { get; set; }
+    public DbSet<Privilege> Privileges { get; set; }
 
-  public DbSet<User> Users { get; set; }
+    public DbSet<User> Users { get; set; }
 
-  public DbSet<Role> Roles { get; set; }
+    public DbSet<Role> Roles { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {

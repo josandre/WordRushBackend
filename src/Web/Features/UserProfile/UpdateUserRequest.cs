@@ -9,5 +9,4 @@ public class UpdateUserRequest
   public string? Email { get; set; } = string.Empty;
 
   public string? Avatar { get; set; } = string.Empty;
-  
 }

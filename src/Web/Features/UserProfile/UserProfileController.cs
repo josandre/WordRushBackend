@@ -69,43 +69,5 @@ namespace WordRush.Web.Features.UserProfile
         return BadRequest(user);
       }
     }
-
-    [HttpPut("change-password")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(bool))]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<bool>> ChangePassword([FromBody] ChangePasswordRequest request)
-    {
-      if (!ModelState.IsValid)
-      {
-        return BadRequest(ModelState);
-      }
-
-      if (request.Id <= 0 ||
-          string.IsNullOrWhiteSpace(request.CurrentPassword) ||
-          string.IsNullOrWhiteSpace(request.NewPassword) ||
-          string.IsNullOrWhiteSpace(request.ConfirmPassword))
-      {
-        return BadRequest("All fields are required!");
-      }
-
-      if (request.NewPassword != request.ConfirmPassword)
-      {
-        return BadRequest("Passwords don't match!");
-      }
-
-      bool result = await userService.ChangeUserPassword(
-          request.Id,
-          request.CurrentPassword,
-          request.NewPassword);
-
-      if (!result)
-      {
-        return NotFound("User not found or Incorrect Password");
-      }
-
-      Log.Information("Password changed successfully for user {UserId}", request.Id);
-      return Ok(true);
-    }
   }
 }

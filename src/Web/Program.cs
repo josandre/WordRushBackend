@@ -9,6 +9,8 @@ using WordRush.Core.Features;
 using WordRush.Core.Infrastructure.Identity;
 using WordRush.Repository;
 using WordRush.Repository.Models;
+using WordRush.Web.Endpoints;
+using WordRush.Web.Features.WebSockets;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 IServiceCollection services = builder.Services;
@@ -51,8 +53,10 @@ services.AddSwaggerGen(options =>
   });
 });
 
-var jwtKey = builder.Configuration["Jwt:Secret"];
-var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+builder.Services.AddSingleton<IWordRushWebSocketService, WordRushWebSocketService>();
+
+string? jwtKey = builder.Configuration["Jwt:Secret"];
+string? jwtIssuer = builder.Configuration["Jwt:Issuer"];
 
 services.AddAuthentication(options =>
   {
@@ -74,7 +78,7 @@ services.AddAuthentication(options =>
     };
   });
 
-var myAllowSpecificOrigins = "_myAllowSpecificOrigins";
+string? myAllowSpecificOrigins = "_myAllowSpecificOrigins";
 
 services.AddCors(options =>
 {
@@ -94,7 +98,7 @@ services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connection));
 
 builder.Services.AddDataProtection();
 
-var identityBuilder = builder.Services
+IdentityBuilder identityBuilder = builder.Services
   .AddIdentityCore<User>(
     o =>
     {
@@ -128,7 +132,7 @@ builder.Services.AddDataProtection();
 
 builder.Host.UseSerilog();
 
-var app = builder.Build();
+WebApplication app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
@@ -143,5 +147,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health");
+app.UseWebSockets();
+app.MapWebSocketEndpoints();
 
 await app.RunAsync();

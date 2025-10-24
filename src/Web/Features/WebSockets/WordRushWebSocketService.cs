@@ -15,7 +15,7 @@ namespace WordRush.Web.Features.WebSockets
     public async Task BroadcastAsync(string roomId, string message)
     {
       if (!_rooms.TryGetValue(roomId, out var room))
-        return;
+      { return; }
 
       var bytes = Encoding.UTF8.GetBytes(message);
       var segment = new ArraySegment<byte>(bytes);
@@ -25,7 +25,9 @@ namespace WordRush.Web.Features.WebSockets
         foreach (var socket in room.Participants)
         {
           if (socket.State == WebSocketState.Open)
+          {
             _ = socket.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
+          }
         }
       }
     }
@@ -43,7 +45,9 @@ namespace WordRush.Web.Features.WebSockets
         foreach (var socket in room.Participants)
         {
           if (socket.State == WebSocketState.Open)
+          {
             _ = socket.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
+          }
         }
       }
 
@@ -51,14 +55,18 @@ namespace WordRush.Web.Features.WebSockets
       foreach (var socket in room.Participants)
       {
         if (socket.State == WebSocketState.Open)
+        {
           await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Room closed", CancellationToken.None);
+        }
       }
     }
 
     public async Task<IList<string>> GetUsersInRoomAsync(string roomId)
     {
       if (!_rooms.TryGetValue(roomId, out var room))
+      {
         return new List<string>();
+      }
 
       return room.GetUserIds(_socketToUser);
     }
@@ -67,7 +75,9 @@ namespace WordRush.Web.Features.WebSockets
     {
       var target = _socketToUser.FirstOrDefault(p => p.Value == userId).Key;
       if (target == null || target.State != WebSocketState.Open)
+      {
         return;
+      }
 
       var bytes = Encoding.UTF8.GetBytes(message);
       await target.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
@@ -95,8 +105,7 @@ namespace WordRush.Web.Features.WebSockets
         {
           var result = await socket.ReceiveAsync(
               new ArraySegment<byte>(buffer),
-              CancellationToken.None
-          );
+              CancellationToken.None);
 
           // Handle client disconnects
           if (result.MessageType == WebSocketMessageType.Close)
@@ -123,12 +132,14 @@ namespace WordRush.Web.Features.WebSockets
     private async Task ProcessMessageAsync(WebSocket socket, string userId, string message)
     {
       if (string.IsNullOrWhiteSpace(message))
+      {
         return;
+      }
 
       // CREATE ROOM
       if (message == "CREATE_GAMEROOM")
       {
-        var room = new GameRoom();
+        GameRoom room = new();
 
         // Register owner
         room.OwnerUserId = userId;
@@ -172,6 +183,7 @@ namespace WordRush.Web.Features.WebSockets
         {
           await SendAsync(socket, $"ROOM_NOT_FOUND:{roomId}");
         }
+
         return;
       }
 
@@ -207,6 +219,7 @@ namespace WordRush.Web.Features.WebSockets
           Console.WriteLine($"[ERROR] Failed to parse/update profile: {ex.Message}");
           await SendAsync(socket, $"PROFILE_ERROR:{ex.Message}");
         }
+
         return;
       }
 
@@ -219,6 +232,7 @@ namespace WordRush.Web.Features.WebSockets
           room.ToggleReady(userId);
           await BroadcastUserList(room);
         }
+
         return;
       }
 
@@ -238,8 +252,10 @@ namespace WordRush.Web.Features.WebSockets
             await SendAsync(socket, "HOST_ONLY_START");
           }
         }
+
         return;
       }
+
       // LEAVE ROOM
       if (message == "LEAVE_ROOM")
       {
@@ -261,9 +277,10 @@ namespace WordRush.Web.Features.WebSockets
           {
             Console.WriteLine($"[ROOM_CLOSED] {roomId}");
             await BroadcastToRoom(room, "ROOM_CLOSED_BY_OWNER");
-            _rooms.TryRemove(roomId, out _);
+            _ = _rooms.TryRemove(roomId, out _);
           }
         }
+
         return;
       }
 
@@ -289,14 +306,16 @@ namespace WordRush.Web.Features.WebSockets
         foreach (var s in room.Participants.ToList())
         {
           if (s.State == WebSocketState.Open)
+          {
             _ = s.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
+          }
         }
       }
     }
 
     private async Task SendAsync(WebSocket socket, string message)
     {
-      if (socket.State != WebSocketState.Open) return;
+      if (socket.State != WebSocketState.Open) { return; }
       var bytes = Encoding.UTF8.GetBytes(message);
       await socket.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
     }
@@ -304,7 +323,10 @@ namespace WordRush.Web.Features.WebSockets
     private async Task RemoveUserFromRoom(WebSocket socket)
     {
       if (!_socketToUser.TryRemove(socket, out var userId))
+      {
         return;
+      }
+
       Console.WriteLine($"[REMOVE_USER] Cleaning up {userId} from room...");
 
       if (_userToRoom.TryRemove(userId, out var roomId) && _rooms.TryGetValue(roomId, out var room))
@@ -317,21 +339,23 @@ namespace WordRush.Web.Features.WebSockets
           foreach (var s in room.Participants.ToList())
           {
             if (s.State == WebSocketState.Open)
+            {
               await s.CloseAsync(WebSocketCloseStatus.NormalClosure, "Room closed by owner", CancellationToken.None);
+            }
           }
 
-          _rooms.TryRemove(roomId, out _);
+          _ = _rooms.TryRemove(roomId, out _);
           return;
         }
 
         // Regular user leaves
         room.Remove(socket);
-        room.ReadyStatus.TryRemove(userId, out _);
-        room.Profiles.TryRemove(userId, out _);
+        _ = room.ReadyStatus.TryRemove(userId, out _);
+        _ = room.Profiles.TryRemove(userId, out _);
 
         if (room.IsEmpty)
         {
-          _rooms.TryRemove(roomId, out _);
+          _ = _rooms.TryRemove(roomId, out _);
         }
         else
         {
@@ -372,18 +396,18 @@ namespace WordRush.Web.Features.WebSockets
     {
       try
       {
-        if (socket.State != WebSocketState.Closed &&
-            socket.State != WebSocketState.Aborted)
+        if (socket.State is not WebSocketState.Closed and not WebSocketState.Aborted)
         {
           await socket.CloseAsync(
               WebSocketCloseStatus.InternalServerError,
               "Internal server error",
-              CancellationToken.None
-          );
+              CancellationToken.None);
         }
       }
-      catch { /* ignore cleanup exceptions */ }
+      catch
+      {
+        /* ignore cleanup exceptions */
+      }
     }
-
   }
 }

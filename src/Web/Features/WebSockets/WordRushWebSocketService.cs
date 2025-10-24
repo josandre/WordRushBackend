@@ -11,6 +11,7 @@ namespace WordRush.Web.Features.WebSockets
     private readonly ConcurrentDictionary<string, GameRoom> _rooms = new();
     private readonly ConcurrentDictionary<WebSocket, string> _socketToUser = new();
     private readonly ConcurrentDictionary<string, string> _userToRoom = new();
+
     public async Task BroadcastAsync(string roomId, string message)
     {
       if (!_rooms.TryGetValue(roomId, out var room))
@@ -71,85 +72,149 @@ namespace WordRush.Web.Features.WebSockets
       var bytes = Encoding.UTF8.GetBytes(message);
       await target.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
     }
+
     public async Task HandleConnectionAsync(WebSocket socket)
     {
-      var userId = Guid.NewGuid().ToString();
-      _socketToUser[socket] = userId;
+      // Assign or reuse a user ID for this socket
+      string userId;
 
-      await SendAsync(socket, $"Connected! Your User ID is {userId}");
+      if (!_socketToUser.TryGetValue(socket, out userId))
+      {
+        userId = Guid.NewGuid().ToString();
+        _socketToUser[socket] = userId;
+
+        Console.WriteLine($"[CONNECTED] New client assigned userId = {userId}");
+      }
+
+      var buffer = new byte[1024 * 4];
 
       try
       {
-        var buffer = new byte[1024 * 4];
+        // Listen for incoming messages
         while (socket.State == WebSocketState.Open)
         {
-          var result = await socket.ReceiveAsync(buffer, CancellationToken.None);
-          if (result.MessageType == WebSocketMessageType.Close)
-            break;
+          var result = await socket.ReceiveAsync(
+              new ArraySegment<byte>(buffer),
+              CancellationToken.None
+          );
 
-          var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+          // Handle client disconnects
+          if (result.MessageType == WebSocketMessageType.Close)
+          {
+            await HandleDisconnectAsync(socket, userId);
+            break;
+          }
+
+          // Process incoming text message
+          var message = Encoding.UTF8
+              .GetString(buffer, 0, result.Count)
+              .Trim();
+
           await ProcessMessageAsync(socket, userId, message);
         }
       }
-      finally
+      catch (Exception ex)
       {
-        await RemoveUserFromRoom(socket);
+        Console.WriteLine($"[ERROR] Connection failed: {ex.Message}");
+        await CloseSocketSafely(socket);
       }
     }
 
     private async Task ProcessMessageAsync(WebSocket socket, string userId, string message)
     {
-      if (message.StartsWith("CREATE_GAMEROOM", StringComparison.OrdinalIgnoreCase))
-      {
-        var room = new GameRoom { OwnerUserId = userId };
-        room.Add(socket);
-        _rooms[room.RoomId] = room;
-        _userToRoom[userId] = room.RoomId;
+      if (string.IsNullOrWhiteSpace(message))
+        return;
 
-        await SendAsync(socket, $"Room created! Room ID: {room.RoomId}");
+      // CREATE ROOM
+      if (message == "CREATE_GAMEROOM")
+      {
+        var room = new GameRoom();
+
+        // Register owner
+        room.OwnerUserId = userId;
+        _userToRoom[userId] = room.RoomId;
+        _rooms[room.RoomId] = room;
+        room.Add(socket);
+
+        // ✅ Send standardized message
+        await SendAsync(socket, $"ROOM_CREATED:{room.RoomId}");
+
+        Console.WriteLine($"[ROOM_CREATED] User {userId} created room {room.RoomId}");
+
+        // Broadcast updated list (just the owner for now)
         await BroadcastUserList(room);
         return;
       }
 
-      if (message.StartsWith("JOIN_GAMEROOM:", StringComparison.OrdinalIgnoreCase))
+      // JOIN ROOM
+      if (message.StartsWith("JOIN_GAMEROOM:"))
       {
-        var roomId = message.Split(':')[1];
+        var roomId = message.Replace("JOIN_GAMEROOM:", "").Trim();
+
         if (_rooms.TryGetValue(roomId, out var room))
         {
+          if (room.GetUserIds(_socketToUser).Contains(userId))
+          {
+            await SendAsync(socket, "ALREADY_IN_ROOM");
+            return;
+          }
+
           room.Add(socket);
           _userToRoom[userId] = roomId;
-          await SendAsync(socket, $"Joined room {roomId}");
+
+          await SendAsync(socket, $"JOINED_ROOM:{roomId}");
+          await SendAsync(socket, "REQUEST_PROFILE_UPDATE");
+
+          Console.WriteLine($"[JOINED_ROOM] User {userId} joined {roomId}");
           await BroadcastUserList(room);
         }
         else
         {
-          await SendAsync(socket, $"Room {roomId} not found");
+          await SendAsync(socket, $"ROOM_NOT_FOUND:{roomId}");
         }
         return;
       }
 
-      if (message.StartsWith("UPDATE_PROFILE:", StringComparison.OrdinalIgnoreCase))
+      // UPDATE PROFILE
+      if (message.StartsWith("UPDATE_PROFILE:"))
       {
-        var json = message.Substring("UPDATE_PROFILE:".Length);
+        var json = message.Replace("UPDATE_PROFILE:", "").Trim();
         try
         {
           var profile = JsonSerializer.Deserialize<UserProfile>(json);
-          if (profile != null && _userToRoom.TryGetValue(userId, out var roomId) && _rooms.TryGetValue(roomId, out var room))
+          if (profile == null)
+          {
+            await SendAsync(socket, "INVALID_PROFILE_DATA");
+            return;
+          }
+
+          if (_userToRoom.TryGetValue(userId, out var roomId) &&
+              _rooms.TryGetValue(roomId, out var room))
           {
             room.Profiles[userId] = profile;
+            room.ReadyStatus[userId] = false;
+
+            Console.WriteLine($"[PROFILE_UPDATE] {userId}: {profile.Nickname} ({profile.Avatar})");
             await BroadcastUserList(room);
+          }
+          else
+          {
+            await SendAsync(socket, "PROFILE_UPDATE_FAILED");
           }
         }
         catch (Exception ex)
         {
-          await SendAsync(socket, $"Profile error: {ex.Message}");
+          Console.WriteLine($"[ERROR] Failed to parse/update profile: {ex.Message}");
+          await SendAsync(socket, $"PROFILE_ERROR:{ex.Message}");
         }
         return;
       }
 
-      if (message.Equals("TOGGLE_READY", StringComparison.OrdinalIgnoreCase))
+      // TOGGLE READY
+      if (message == "TOGGLE_READY")
       {
-        if (_userToRoom.TryGetValue(userId, out var roomId) && _rooms.TryGetValue(roomId, out var room))
+        if (_userToRoom.TryGetValue(userId, out var roomId) &&
+            _rooms.TryGetValue(roomId, out var room))
         {
           room.ToggleReady(userId);
           await BroadcastUserList(room);
@@ -157,56 +222,60 @@ namespace WordRush.Web.Features.WebSockets
         return;
       }
 
-      if (message.Equals("START_GAME", StringComparison.OrdinalIgnoreCase))
+      // START GAME
+      if (message == "START_GAME")
       {
-        if (_userToRoom.TryGetValue(userId, out var roomId) && _rooms.TryGetValue(roomId, out var room))
+        if (_userToRoom.TryGetValue(userId, out var roomId) &&
+            _rooms.TryGetValue(roomId, out var room))
         {
-          if (userId != room.OwnerUserId)
+          if (room.OwnerUserId == userId)
           {
-            await SendAsync(socket, "Only the host can start the game.");
-            return;
+            Console.WriteLine($"[GAME_STARTING] Room {roomId}");
+            await BroadcastToRoom(room, "GAME_STARTING");
           }
-
-          if (!room.AllReady)
+          else
           {
-            await SendAsync(socket, "Not all players are ready.");
-            return;
+            await SendAsync(socket, "HOST_ONLY_START");
           }
+        }
+        return;
+      }
+      // LEAVE ROOM
+      if (message == "LEAVE_ROOM")
+      {
+        Console.WriteLine($"[LEAVE_ROOM] {userId} requested to leave the room.");
 
-          await BroadcastToRoom(room, "GAME_STARTING");
+        await RemoveUserFromRoom(socket);
+        await SendAsync(socket, "LEFT_ROOM");
+
+        return;
+      }
+
+      // CLOSE ROOM
+      if (message == "CLOSE_GAMEROOM")
+      {
+        if (_userToRoom.TryGetValue(userId, out var roomId) &&
+            _rooms.TryGetValue(roomId, out var room))
+        {
+          if (room.OwnerUserId == userId)
+          {
+            Console.WriteLine($"[ROOM_CLOSED] {roomId}");
+            await BroadcastToRoom(room, "ROOM_CLOSED_BY_OWNER");
+            _rooms.TryRemove(roomId, out _);
+          }
         }
         return;
       }
 
-      if (message.Equals("CLOSE_GAMEROOM", StringComparison.OrdinalIgnoreCase))
-      {
-        if (_userToRoom.TryGetValue(userId, out var roomId) && _rooms.TryGetValue(roomId, out var room))
-        {
-          if (room.OwnerUserId != userId)
-          {
-            await SendAsync(socket, "Only the host can close this room.");
-            return;
-          }
-
-          await BroadcastToRoom(room, "ROOM_CLOSED");
-          foreach (var s in room.Participants)
-            await s.CloseAsync(WebSocketCloseStatus.NormalClosure, "Room closed", CancellationToken.None);
-
-          _rooms.TryRemove(roomId, out _);
-        }
-        return;
-      }
-
-      // Default: Broadcast message to all players in room
-      if (_userToRoom.TryGetValue(userId, out var roomIdDefault) && _rooms.TryGetValue(roomIdDefault, out var defaultRoom))
-      {
-        await BroadcastToRoom(defaultRoom, $"{userId}: {message}");
-      }
+      // UNHANDLED
+      Console.WriteLine($"[UNHANDLED MESSAGE] {message}");
     }
 
     private async Task BroadcastUserList(GameRoom room)
     {
-      var json = JsonSerializer.Serialize(room.GetPlayerSnapshots());
+      var users = room.GetPlayerSnapshots();
+      var json = JsonSerializer.Serialize(users);
+
       await BroadcastToRoom(room, $"USER_LIST_JSON:{json}");
     }
 
@@ -236,6 +305,7 @@ namespace WordRush.Web.Features.WebSockets
     {
       if (!_socketToUser.TryRemove(socket, out var userId))
         return;
+      Console.WriteLine($"[REMOVE_USER] Cleaning up {userId} from room...");
 
       if (_userToRoom.TryRemove(userId, out var roomId) && _rooms.TryGetValue(roomId, out var room))
       {
@@ -268,6 +338,51 @@ namespace WordRush.Web.Features.WebSockets
           await BroadcastUserList(room);
         }
       }
+    }
+
+    private async Task HandleDisconnectAsync(WebSocket socket, string userId)
+    {
+      Console.WriteLine($"[DISCONNECTED] userId = {userId}");
+
+      try
+      {
+        // Gracefully close if still open
+        if (socket.State == WebSocketState.Open)
+        {
+          await socket.CloseAsync(
+            WebSocketCloseStatus.NormalClosure,
+            "Client disconnected",
+            CancellationToken.None
+          );
+        }
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine($"[WARN] Error closing socket for {userId}: {ex.Message}");
+      }
+
+      // ✅ Unified cleanup path
+      await RemoveUserFromRoom(socket);
+
+      // ✅ Log final cleanup confirmation
+      Console.WriteLine($"[CLEANUP] User {userId} fully removed from system.");
+    }
+
+    private async Task CloseSocketSafely(WebSocket socket)
+    {
+      try
+      {
+        if (socket.State != WebSocketState.Closed &&
+            socket.State != WebSocketState.Aborted)
+        {
+          await socket.CloseAsync(
+              WebSocketCloseStatus.InternalServerError,
+              "Internal server error",
+              CancellationToken.None
+          );
+        }
+      }
+      catch { /* ignore cleanup exceptions */ }
     }
 
   }

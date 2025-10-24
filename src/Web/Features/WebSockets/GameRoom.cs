@@ -47,15 +47,28 @@ namespace WordRush.Web.Features.WebSockets
       ReadyStatus[userId] = !ReadyStatus.GetValueOrDefault(userId, false);
     }
 
+    // --- KEY FIX ---
+    // This now ensures that even if a player doesn’t have a saved profile,
+    // we still include them in the user list broadcast.
     public List<PlayerSnapshot> GetPlayerSnapshots()
     {
-      return Profiles.Select(kv => new PlayerSnapshot
+      // If Profiles is empty (e.g., right after joining),
+      // we use ReadyStatus or default entries to populate the snapshot.
+      var keys = Profiles.Keys.Any()
+          ? Profiles.Keys
+          : ReadyStatus.Keys;
+
+      return keys.Select(userId =>
       {
-        UserId = kv.Key,
-        Nickname = kv.Value.Nickname,
-        Avatar = kv.Value.Avatar,
-        IsReady = ReadyStatus.GetValueOrDefault(kv.Key, false),
-        IsOwner = kv.Key == OwnerUserId
+        Profiles.TryGetValue(userId, out var profile);
+        return new PlayerSnapshot
+        {
+          UserId = userId,
+          Nickname = profile?.Nickname ?? $"Player-{userId[..5]}",
+          Avatar = profile?.Avatar ?? "",
+          IsReady = ReadyStatus.GetValueOrDefault(userId, false),
+          IsOwner = userId == OwnerUserId
+        };
       }).ToList();
     }
   }

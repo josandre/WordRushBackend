@@ -9,16 +9,22 @@ using WordRush.Core.Features;
 using WordRush.Core.Infrastructure.Identity;
 using WordRush.Repository;
 using WordRush.Repository.Models;
+using WordRush.Web.Features.WebSockets;
+using WordRush.Web.Endpoints;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 IServiceCollection services = builder.Services;
 
+// ------------------------------------------------------------
+// Core Service Setup
+// ------------------------------------------------------------
 services.AddHealthChecks();
 services.AddControllers();
 services.AddEndpointsApiExplorer();
 
 Log.Logger = new LoggerConfiguration()
-  .ReadFrom.Configuration(builder.Configuration).CreateLogger();
+    .ReadFrom.Configuration(builder.Configuration)
+    .CreateLogger();
 
 services.AddSwaggerGen(options =>
 {
@@ -36,104 +42,120 @@ services.AddSwaggerGen(options =>
   });
 
   options.AddSecurityRequirement(new OpenApiSecurityRequirement
-  {
     {
-      new OpenApiSecurityScheme
-      {
-        Reference = new OpenApiReference
         {
-          Type = ReferenceType.SecurityScheme,
-          Id = "Bearer"
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
         }
-      },
-      []
-    }
-  });
+    });
 });
 
-var jwtKey = builder.Configuration["Jwt:Secret"];
-var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+// ------------------------------------------------------------
+// WebSocket Service
+// ------------------------------------------------------------
+builder.Services.AddSingleton<IWordRushWebSocketService, WordRushWebSocketService>();
+
+// ------------------------------------------------------------
+// Authentication & Identity
+// ------------------------------------------------------------
+string? jwtKey = builder.Configuration["Jwt:Secret"];
+string? jwtIssuer = builder.Configuration["Jwt:Issuer"];
 
 services.AddAuthentication(options =>
-  {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-  })
-  .AddJwtBearer(options =>
-  {
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-      ValidateIssuer = true,
-      ValidateAudience = true,
-      ValidateLifetime = true,
-      ValidateIssuerSigningKey = true,
-
-      ValidIssuer = jwtIssuer,
-      ValidAudience = jwtIssuer,
-      IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
-    };
-  });
-
-var myAllowSpecificOrigins = "_myAllowSpecificOrigins";
-
-services.AddCors(options =>
 {
-  options.AddPolicy(
-    myAllowSpecificOrigins,
-    policy => { _ = policy.WithOrigins("*").AllowAnyHeader().AllowAnyMethod(); });
+  options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+  options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+  options.TokenValidationParameters = new TokenValidationParameters
+  {
+    ValidateIssuer = true,
+    ValidateAudience = true,
+    ValidateLifetime = true,
+    ValidateIssuerSigningKey = true,
+    ValidIssuer = jwtIssuer,
+    ValidAudience = jwtIssuer,
+    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey!))
+  };
 });
 
+// ------------------------------------------------------------
+// CORS Setup
+// ------------------------------------------------------------
+string myAllowSpecificOrigins = "_myAllowSpecificOrigins";
+services.AddCors(options =>
+{
+  options.AddPolicy(myAllowSpecificOrigins, policy =>
+  {
+    policy.AllowAnyOrigin()
+          .AllowAnyHeader()
+          .AllowAnyMethod();
+  });
+});
+
+// ------------------------------------------------------------
+// Development Secrets & Database
+// ------------------------------------------------------------
 if (builder.Environment.IsDevelopment())
 {
-  _ = builder.Configuration.AddUserSecrets<Program>(optional: true, reloadOnChange: true);
+  builder.Configuration.AddUserSecrets<Program>(optional: true, reloadOnChange: true);
 }
 
 string? connection = builder.Configuration.GetConnectionString("WordRushDb");
-
 services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connection));
-
 builder.Services.AddDataProtection();
 
-var identityBuilder = builder.Services
-  .AddIdentityCore<User>(
-    o =>
+// ------------------------------------------------------------
+// Identity Configuration
+// ------------------------------------------------------------
+IdentityBuilder identityBuilder = builder.Services
+    .AddIdentityCore<User>(options =>
     {
-      o.Password.RequireDigit = true;
-      o.Password.RequiredLength = 8;
-      o.Password.RequireLowercase = true;
-      o.Password.RequireUppercase = true;
-      o.Password.RequireNonAlphanumeric = false;
+      options.Password.RequireDigit = true;
+      options.Password.RequiredLength = 8;
+      options.Password.RequireLowercase = true;
+      options.Password.RequireUppercase = true;
+      options.Password.RequireNonAlphanumeric = false;
 
-      o.User.AllowedUserNameCharacters = null!;
-      o.SignIn.RequireConfirmedEmail = false;
+      options.User.AllowedUserNameCharacters = null!;
+      options.SignIn.RequireConfirmedEmail = false;
     });
 
 identityBuilder
-  .AddRoles<Role>()
-  .AddEntityFrameworkStores<AppDbContext>()
-  .AddDefaultTokenProviders();
+    .AddRoles<Role>()
+    .AddEntityFrameworkStores<AppDbContext>()
+    .AddDefaultTokenProviders();
 
 builder.Services
-  .Configure<PasswordHasherOptions>(o => o.IterationCount = 300_000)
-  .AddHttpContextAccessor()
-  .AddScoped<SignInManager<User>, SignInManager<User>>();
+    .Configure<PasswordHasherOptions>(o => o.IterationCount = 300_000)
+    .AddHttpContextAccessor()
+    .AddScoped<SignInManager<User>, SignInManager<User>>();
 
 builder.Services
-  .AddScoped<IAuthService, AuthService>()
-  .AddScoped<IRoleService, RoleService>()
-  .AddScoped<IUserService, UserService>()
-  .AddSingleton<IFeatureFlagService, FeatureFlagService>();
-
-builder.Services.AddDataProtection();
+    .AddScoped<IAuthService, AuthService>()
+    .AddScoped<IRoleService, RoleService>()
+    .AddScoped<IUserService, UserService>()
+    .AddSingleton<IFeatureFlagService, FeatureFlagService>();
 
 builder.Host.UseSerilog();
 
-var app = builder.Build();
+// ------------------------------------------------------------
+// Build Application
+// ------------------------------------------------------------
+WebApplication app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-  _ = app.UseSwagger();
-  _ = app.UseSwaggerUI();
+  app.UseSwagger();
+  app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
@@ -144,4 +166,18 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health");
 
+// ------------------------------------------------------------
+// WebSocket Integration
+// ------------------------------------------------------------
+app.UseWebSockets(new WebSocketOptions
+{
+  KeepAliveInterval = TimeSpan.FromSeconds(120)
+});
+
+// ✅ use your custom endpoint mapper instead of inline /ws
+app.MapWebSocketEndpoints();
+
+// ------------------------------------------------------------
+// Run Application
+// ------------------------------------------------------------
 await app.RunAsync();

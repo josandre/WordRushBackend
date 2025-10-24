@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <Compile Remove="Features\UserProfile\ChangePasswordRequest.cs" />
+    <Compile Remove="Features\WebSockets\WebSocketRoom.cs" />
   </ItemGroup>
 
   <ItemGroup>

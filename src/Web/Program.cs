@@ -6,11 +6,11 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using WordRush.Core.Features;
+using WordRush.Core.Features.Realtime;
 using WordRush.Core.Infrastructure.Identity;
 using WordRush.Repository;
 using WordRush.Repository.Models;
-using WordRush.Web.Features.WebSockets;
-using WordRush.Web.Endpoints;
+using WordRush.Web.Controllers;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 IServiceCollection services = builder.Services;
@@ -56,11 +56,6 @@ services.AddSwaggerGen(options =>
         }
     });
 });
-
-// ------------------------------------------------------------
-// WebSocket Service
-// ------------------------------------------------------------
-builder.Services.AddSingleton<IWordRushWebSocketService, WordRushWebSocketService>();
 
 // ------------------------------------------------------------
 // Authentication & Identity
@@ -143,7 +138,8 @@ builder.Services
     .AddScoped<IAuthService, AuthService>()
     .AddScoped<IRoleService, RoleService>()
     .AddScoped<IUserService, UserService>()
-    .AddSingleton<IFeatureFlagService, FeatureFlagService>();
+    .AddSingleton<IFeatureFlagService, FeatureFlagService>()
+    .AddSingleton<IWordRushWebSocketService, WordRushWebSocketService>();
 
 builder.Host.UseSerilog();
 
@@ -174,8 +170,6 @@ app.UseWebSockets(new WebSocketOptions
   KeepAliveInterval = TimeSpan.FromSeconds(120)
 });
 
-// ✅ use your custom endpoint mapper instead of inline /ws
-app.MapWebSocketEndpoints();
 
 // ------------------------------------------------------------
 // Run Application

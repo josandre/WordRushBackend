@@ -1,12 +1,12 @@
+using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
-using System.Collections.Concurrent;
 using System.Text.Json;
-using WordRush.Core.Features;
+using WordRush.Core.Features.Realtime.Models;
 
-namespace WordRush.Web.Features.WebSockets
+namespace WordRush.Core.Features.Realtime
 {
-  public class WordRushWebSocketService: IWordRushWebSocketService
+  public class WordRushWebSocketService : IWordRushWebSocketService
   {
     private readonly ConcurrentDictionary<string, GameRoom> _rooms = new();
     private readonly ConcurrentDictionary<WebSocket, string> _socketToUser = new();

@@ -9,6 +9,6 @@ namespace WordRush.Core.Features.Realtime.Models.CreateRoom
   [Serializable]
   public class CreateGameRoomEvent
   {
-    public UserProfile PlayerProfile { get; set; } // The user that is requesting the room creation
+    public UserProfile PlayerProfile { get; set; }
   }
 }

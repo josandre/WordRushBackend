@@ -44,23 +44,20 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
 
       GameRoom room = new(webSocketService.GenerateValidRoomID())
       {
-        // Register owner
-        OwnerUserId = userID
+        HostId = userID
       };
 
       webSocketService.UserToRoom[userID] = room.RoomId;
       webSocketService.Rooms[room.RoomId] = room;
 
-      // Add the player who created the room
       room.AddParticipantSocket(socket);
       room.AddUser(userID, createRoomEvent.PlayerProfile);
 
-      Console.WriteLine($"[GAME ROOM] The profile: Nickname: {createRoomEvent.PlayerProfile.Nickname}, Avatar: {createRoomEvent.PlayerProfile.Avatar}, Email: {createRoomEvent.PlayerProfile.Email}");
+      Console.WriteLine($"[GAME ROOM] The profile: Nickname: {createRoomEvent.PlayerProfile.Nickname} Email: {createRoomEvent.PlayerProfile.Email}");
       Console.WriteLine($"[GAME ROOM] Room with ID: {room.RoomId} created by User {userID}");
 
       GameRoomCreatedEvent roomCreatedEventData = new GameRoomCreatedEvent(room.RoomId);
 
-      // Send message
       string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
       string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.CREATED.ToString();
 
@@ -72,22 +69,19 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
     {
       JoinGameRoomEvent joinGameRoomEvent = JsonSerializer.Deserialize<JoinGameRoomEvent>(jsonData);
 
-      // The room exists
-      if (webSocketService.Rooms.TryGetValue(joinGameRoomEvent.RoomID, out GameRoom room))
+      GameRoom? room = webSocketService.GetRoom(joinGameRoomEvent.RoomID);
+      if (room != null)
       {
         webSocketService.UserToRoom[userID] = room.RoomId;
 
-        // Add the player to the room
         room.AddParticipantSocket(socket);
         room.AddUser(userID, joinGameRoomEvent.PlayerProfile);
 
-        // Notify the users in the room about the new user
         await BroadcastRoomData(webSocketService, room);
 
         GameRoomJoinedEvent roomJoinedEventData = new();
         roomJoinedEventData.GameRoomID = room.RoomId;
 
-        // Notify the user, so it can navigate to the lobby screen
         string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
         string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.JOINED.ToString();
 
@@ -108,29 +102,38 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
     private async Task LeaveRoom(WordRushWebSocketService webSocketService, WebSocket socket, string userID)
     {
       // Check if the user is in a room
-      if (webSocketService.UserToRoom.TryGetValue(userID, out string roomID) &&
-          webSocketService.Rooms.TryGetValue(roomID, out GameRoom room))
+      if (webSocketService.UserToRoom.TryGetValue(userID, out string roomID))
       {
-        await webSocketService.OnPlayerLeftRoom(socket, room, userID);
+        GameRoom? room = webSocketService.GetRoom(roomID);
+        if (room != null)
+        {
+          await webSocketService.OnPlayerLeftRoom(socket, room, userID);
+        }
       }
     }
 
     private async Task ToggleReadyState(WordRushWebSocketService webSocketService, string userID)
     {
-      if (webSocketService.UserToRoom.TryGetValue(userID, out string roomID) &&
-          webSocketService.Rooms.TryGetValue(roomID, out GameRoom room))
+      if (webSocketService.UserToRoom.TryGetValue(userID, out string roomID))
       {
-        room.ToggleReady(userID);
-        await BroadcastRoomData(webSocketService, room);
+        GameRoom? room = webSocketService.GetRoom(roomID);
+        if (room != null)
+        {
+          room.ToggleReady(userID);
+          await BroadcastRoomData(webSocketService, room);
+        }
       }
     }
 
     private async Task RequestRoomData(WordRushWebSocketService webSocketService, string userID)
     {
-      if (webSocketService.UserToRoom.TryGetValue(userID, out string roomID) &&
-          webSocketService.Rooms.TryGetValue(roomID, out GameRoom room))
+      if (webSocketService.UserToRoom.TryGetValue(userID, out string roomID))
       {
-        await BroadcastRoomData(webSocketService, room);
+        GameRoom? room = webSocketService.GetRoom(roomID);
+        if (room != null)
+        {
+          await BroadcastRoomData(webSocketService, room);
+        }
       }
     }
 

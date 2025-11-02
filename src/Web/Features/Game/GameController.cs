@@ -1,35 +1,59 @@
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
-using WordRush.Web.Features.Game.Data;
+using WordRush.Core.Features.Game;
+using WordRush.Web.Controllers;
+using WordRush.Web.Features.Game.Models;
 
 namespace WordRush.Web.Features.Game;
 
-[EnableCors]
-[ApiController]
 [Authorize]
-[Route("api/games")]
-public class GameController : ControllerBase
+[Route("api/game-room")]
+[ApiController]
+public class GameController : ApiControllerBase
 {
-  /// <summary>
-  /// Returns a list with all games of the user.
-  /// </summary>
-  /// <returns>200 OK with a all games for the user.</returns>
-  [HttpGet]
-  [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(List<GameResponse>))]
-  public Task<ActionResult<List<GameResponse>>> Get()
+  private readonly IGameSettingsService _gameSettingsService;
+
+  public GameController(IGameSettingsService gameSettingsService)
   {
-    List<GameResponse> result =
-    [
-      new() { Id = 1, Name = "Dummy game 1" },
-      new() { Id = 1, Name = "Dummy game 2" }
-    ];
+    _gameSettingsService = gameSettingsService;
+  }
 
-    Task<ActionResult<List<GameResponse>>> taskResult = Task.FromResult<ActionResult<List<GameResponse>>>(Ok(result));
+  [HttpPut("update-settings")]
+  public ActionResult<UpdateGameSettingsResponse> UpdateGameSettings([FromBody] UpdateGameSettingsRequest request)
+  {
+    if (!ModelState.IsValid)
+    {
+      return BadRequest(ModelState);
+    }
 
-    Log.Information(messageTemplate: "Game Dummy Result => {@TaskResult}", taskResult);
+    if (string.IsNullOrWhiteSpace(request.RoomId))
+    {
+      return BadRequest("RoomId is required");
+    }
 
-    return taskResult;
+    if (request.Settings.Letters.Length > 5)
+    {
+      return BadRequest("Letters array cannot contain more than 5 elements");
+    }
+
+    GameRoom? updatedRoom = _gameSettingsService.UpdateGameSettings(request.RoomId, request.Settings);
+
+    if (updatedRoom == null)
+    {
+      Log.Warning("Game room not found: {RoomId}", request.RoomId);
+      return NotFound($"Game room with ID '{request.RoomId}' not found");
+    }
+
+    Log.Information("Game settings updated for room: {RoomId}", request.RoomId);
+
+    UpdateGameSettingsResponse response = new()
+    {
+      RoomId = updatedRoom.RoomId,
+      Settings = updatedRoom.Settings
+    };
+
+    return Ok(response);
   }
 }
+

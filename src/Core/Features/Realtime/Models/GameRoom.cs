@@ -1,40 +1,27 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using WordRush.Core.Features.Realtime.Models;
+using WordRush.Repository.Models;
 
 public class GameRoom
 {
   private readonly object _lock = new();
 
-  public int ID { get; set; } = 0;
+  public string RoomId { get; }
 
   public bool Active { get; set; } = true;
 
   public bool InGame { get; set; } = false;
 
-  public int CurrentRound { get; set; } = 0;
-
-  public int TotalRounds { get; set; } = 7;
-
-  public List<Round> Rounds { get; set; } = new();
-
-  public List<string> Letters { get; set; } = new();
-
-  public LetterSelectionMode LetterSelection { get; set; } = LetterSelectionMode.InOrder;
-
-  public int RoundTime { get; set; } = 60; // seconds
+  public GameSettings Settings { get; set; } = new();
 
   public string StartTime { get; set; } = string.Empty;
 
   public string EndTime { get; set; } = string.Empty;
 
-  public string HostID { get; set; } = string.Empty;
+  public string HostId { get; set; } = string.Empty;
 
-  public List<Player> Players { get; set; } = new();
-
-  public string RoomId { get; }
-
-  public string OwnerUserId { get; set; } = string.Empty;
+  public List<User> Players { get; set; } = new();
 
   public List<WebSocket> Participants { get; } = new();
 
@@ -46,9 +33,9 @@ public class GameRoom
 
   public bool AllReady => ReadyStatus.Values.All(v => v);
 
-  public GameRoom(string roomID)
+  public GameRoom(string roomId)
   {
-    RoomId = roomID;
+    RoomId = roomId;
   }
 
   public void AddParticipantSocket(WebSocket socket)
@@ -112,7 +99,7 @@ public class GameRoom
             Nickname = profile?.Nickname ?? $"Player-{userID[..5]}",
             Avatar = profile?.Avatar ?? string.Empty,
             IsReady = ReadyStatus.GetValueOrDefault(userID, false),
-            IsOwner = userID == OwnerUserId
+            IsOwner = userID == HostId
           });
         }
       }
@@ -138,7 +125,7 @@ public class GameRoom
           Nickname = profile?.Nickname ?? $"Player-{userId[..5]}",
           Avatar = profile?.Avatar ?? string.Empty,
           IsReady = ReadyStatus.GetValueOrDefault(userId, false),
-          IsOwner = userId == OwnerUserId
+          IsOwner = userId == HostId
         };
       }).ToList();
     }
@@ -176,24 +163,19 @@ public class GameRoom
       _ = ReadyStatus.TryRemove(userID, out _);
     }
   }
-}
 
-public class Round
-{
-  public Dictionary<string, List<string>> PlayerResponses { get; set; } = new();
-}
+  public void UpdateSettings(GameSettings settings)
+  {
+    if (settings == null)
+    {
+      throw new ArgumentNullException(nameof(settings));
+    }
 
-public class Player
-{
-  public string UserID { get; set; } = string.Empty;
-
-  public int Score { get; set; } = 0;
-}
-
-public enum LetterSelectionMode
-{
-  InOrder,
-  Random
+    lock (_lock)
+    {
+      Settings = settings;
+    }
+  }
 }
 
 [Serializable]

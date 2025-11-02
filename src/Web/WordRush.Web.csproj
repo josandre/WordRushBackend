@@ -8,9 +8,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Features\StopGame\**" />
     <Compile Remove="logs\**" />
+    <Content Remove="Features\StopGame\**" />
     <Content Remove="logs\**" />
+    <EmbeddedResource Remove="Features\StopGame\**" />
     <EmbeddedResource Remove="logs\**" />
+    <None Remove="Features\StopGame\**" />
     <None Remove="logs\**" />
   </ItemGroup>
 

@@ -9,6 +9,8 @@
   <ItemGroup>
     <Compile Remove="Features\IProfileService.cs" />
     <Compile Remove="Features\ProfileService.cs" />
+    <Compile Remove="Features\Scoring\MockScoringService.cs" />
+    <Compile Remove="Features\Scoring\MockWordDictionary.cs" />
     <Compile Remove="GlobalSuppressions.cs" />
   </ItemGroup>
 

@@ -1,10 +1,11 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
-
-namespace WordRush.Core.Features.Realtime.Models;
+using WordRush.Core.Features.Realtime.Models;
 
 public class GameRoom
 {
+  private readonly object _lock = new();
+
   public int ID { get; set; } = 0;
 
   public bool Active { get; set; } = true;
@@ -31,7 +32,7 @@ public class GameRoom
 
   public List<Player> Players { get; set; } = new();
 
-  public string RoomId { get; } = Guid.NewGuid().ToString();
+  public string RoomId { get; }
 
   public string OwnerUserId { get; set; } = string.Empty;
 
@@ -45,27 +46,33 @@ public class GameRoom
 
   public bool AllReady => ReadyStatus.Values.All(v => v);
 
-
-  public void Add(WebSocket socket)
+  public GameRoom(string roomID)
   {
-    lock (Participants)
+    RoomId = roomID;
+  }
+
+  public void AddParticipantSocket(WebSocket socket)
+  {
+    lock (_lock)
     {
       if (!Participants.Contains(socket))
+      {
         Participants.Add(socket);
+      }
     }
   }
 
-  public void Remove(WebSocket socket)
+  public void RemoveParticipantSocket(WebSocket socket)
   {
-    lock (Participants)
+    lock (_lock)
     {
-      Participants.Remove(socket);
+      _ = Participants.Remove(socket);
     }
   }
 
   public List<string> GetUserIds(ConcurrentDictionary<WebSocket, string> userMap)
   {
-    lock (Participants)
+    lock (_lock)
     {
       return Participants
         .Where(userMap.ContainsKey)
@@ -76,27 +83,98 @@ public class GameRoom
 
   public void ToggleReady(string userId)
   {
-    ReadyStatus[userId] = !ReadyStatus.GetValueOrDefault(userId, false);
+    lock (_lock)
+    {
+      ReadyStatus[userId] = !ReadyStatus.GetValueOrDefault(userId, false);
+    }
   }
 
-  public List<PlayerSnapshot> GetPlayerSnapshots()
+  public RoomDataRequestedEvent GetRoomData()
   {
-    var keys = Profiles.Keys.Any()
-      ? Profiles.Keys
-      : ReadyStatus.Keys;
-
-    return keys.Select(userId =>
+    lock (_lock)
     {
-      Profiles.TryGetValue(userId, out var profile);
-      return new PlayerSnapshot
+      ICollection<string> keys = Profiles.Keys.Any()
+        ? Profiles.Keys
+        : ReadyStatus.Keys;
+
+      RoomDataRequestedEvent roomData = new();
+
+      IEnumerator<string> userIDs = Profiles.Keys.GetEnumerator();
+      while (userIDs.MoveNext())
       {
-        UserId = userId,
-        Nickname = profile?.Nickname ?? $"Player-{userId[..5]}",
-        Avatar = profile?.Avatar ?? string.Empty,
-        IsReady = ReadyStatus.GetValueOrDefault(userId, false),
-        IsOwner = userId == OwnerUserId
-      };
-    }).ToList();
+        string userID = userIDs.Current;
+
+        if (Profiles.TryGetValue(userID, out UserProfile profile))
+        {
+          roomData.Players.Add(new RoomDataPlayer
+          {
+            UserId = userID,
+            Nickname = profile?.Nickname ?? $"Player-{userID[..5]}",
+            Avatar = profile?.Avatar ?? string.Empty,
+            IsReady = ReadyStatus.GetValueOrDefault(userID, false),
+            IsOwner = userID == OwnerUserId
+          });
+        }
+      }
+
+      return roomData;
+    }
+  }
+
+  public List<RoomDataPlayer> GetPlayerSnapshots()
+  {
+    lock (_lock)
+    {
+      ICollection<string> keys = Profiles.Keys.Any()
+        ? Profiles.Keys
+        : ReadyStatus.Keys;
+
+      return keys.Select(userId =>
+      {
+        _ = Profiles.TryGetValue(userId, out UserProfile? profile);
+        return new RoomDataPlayer
+        {
+          UserId = userId,
+          Nickname = profile?.Nickname ?? $"Player-{userId[..5]}",
+          Avatar = profile?.Avatar ?? string.Empty,
+          IsReady = ReadyStatus.GetValueOrDefault(userId, false),
+          IsOwner = userId == OwnerUserId
+        };
+      }).ToList();
+    }
+  }
+
+  public List<WebSocket> GetParticipantsSnapshot()
+  {
+    lock (_lock)
+    {
+      return Participants.ToList();
+    }
+  }
+
+  public void AddUser(string userID, UserProfile? profile)
+  {
+    lock (_lock)
+    {
+      if (!Profiles.TryGetValue(userID, out _))
+      {
+        _ = Profiles.TryAdd(userID, profile);
+      }
+
+      if (!ReadyStatus.TryGetValue(userID, out _))
+      {
+        _ = ReadyStatus.TryAdd(userID, false);
+      }
+    }
+  }
+
+  public void RemoveUser(string userID)
+  {
+    lock (_lock)
+    {
+      _ = Profiles.TryRemove(userID, out _);
+      _ = ReadyStatus.TryRemove(userID, out _);
+    }
   }
 }
 
@@ -118,19 +196,7 @@ public enum LetterSelectionMode
   Random
 }
 
-public class PlayerSnapshot
-{
-  public string UserId { get; set; } = string.Empty;
-
-  public string Nickname { get; set; } = "Player";
-
-  public string Avatar { get; set; } = string.Empty;
-
-  public bool IsReady { get; set; }
-
-  public bool IsOwner { get; set; }
-}
-
+[Serializable]
 public class UserProfile
 {
   public string Nickname { get; set; } = "Player";

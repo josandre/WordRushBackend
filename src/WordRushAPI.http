@@ -8,7 +8,7 @@ POST {{rootURL}}/auth/login
 Content-Type: application/json
 {
   "email": "tovar@gmail.com",
-  "password": "NewPassword4"
+  "password": "Password1"
 }
 ###
 Get {{rootURL}}/api/userProfile/get-profile?userEmail=tovar@gmail.com

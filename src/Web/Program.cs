@@ -7,6 +7,8 @@ using Microsoft.OpenApi.Models;
 using Serilog;
 using WordRush.Core.Features;
 using WordRush.Core.Features.Realtime;
+using WordRush.Core.Features.Scoring;
+using WordRush.Core.Features.StopGame;
 using WordRush.Core.Infrastructure.Identity;
 using WordRush.Repository;
 using WordRush.Repository.Models;
@@ -134,12 +136,15 @@ builder.Services
     .AddHttpContextAccessor()
     .AddScoped<SignInManager<User>, SignInManager<User>>();
 
+builder.Services.AddHttpClient();
+
 builder.Services
     .AddScoped<IAuthService, AuthService>()
     .AddScoped<IRoleService, RoleService>()
     .AddScoped<IUserService, UserService>()
     .AddSingleton<IFeatureFlagService, FeatureFlagService>()
-    .AddSingleton<IWordRushWebSocketService, WordRushWebSocketService>();
+    .AddSingleton<IWordRushWebSocketService, WordRushWebSocketService>()
+    .AddScoped<IScoringService, StopGameScoringService>();
 
 builder.Host.UseSerilog();
 

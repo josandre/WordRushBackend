@@ -13,8 +13,6 @@ public class GameRoom
 
   public bool InGame { get; set; } = false;
 
-  public List<Round> Rounds { get; set; } = new();
-
   public GameSettings Settings { get; set; } = new();
 
   public string StartTime { get; set; } = string.Empty;

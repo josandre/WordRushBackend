@@ -43,6 +43,10 @@
     <ProjectReference Include="..\Repository\WordRush.Repository.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Features\Game\CategoryColumns\Models\" />
+  </ItemGroup>
+
   <PropertyGroup>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>

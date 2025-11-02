@@ -15,7 +15,9 @@ namespace WordRush.Repository
     {
     }
 
-    public DbSet<Game> Games { get; set; }
+    public DbSet<CategoryColumn> CategoryColumns { get; set; }
+
+    public DbSet<CategoryType> CategoryTypes { get; set; }
 
     public DbSet<Privilege> Privileges { get; set; }
 

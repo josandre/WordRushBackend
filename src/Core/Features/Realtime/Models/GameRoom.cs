@@ -165,6 +165,19 @@ public class GameRoom
       _ = ReadyStatus.TryRemove(userID, out _);
     }
   }
+
+  public void UpdateSettings(GameSettings settings)
+  {
+    if (settings == null)
+    {
+      throw new ArgumentNullException(nameof(settings));
+    }
+
+    lock (_lock)
+    {
+      Settings = settings;
+    }
+  }
 }
 
 [Serializable]

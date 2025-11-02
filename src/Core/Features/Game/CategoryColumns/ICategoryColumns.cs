@@ -1,8 +1,8 @@
 using WordRush.Repository.Models;
 
-namespace WordRush.Core.Features.Game.Ca;
+namespace WordRush.Core.Features.Game.CategoryColumns;
 
-public interface IGameCategories
+public interface ICategoryColumns
 {
-  public Task<List<CategoryColumn>> GetDefaultCategories();
+  public Task<CategoryType?> GetDefaultCategories();
 }

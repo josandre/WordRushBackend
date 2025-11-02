@@ -7,6 +7,8 @@ using Microsoft.OpenApi.Models;
 using Serilog;
 using WordRush.Core.Features;
 using WordRush.Core.Features.Game;
+using WordRush.Core.Features.Game.CategoryColumns;
+using WordRush.Core.Features.Game.CategoryTypes;
 using WordRush.Core.Features.Realtime;
 using WordRush.Core.Features.Scoring;
 using WordRush.Core.Features.StopGame;
@@ -21,7 +23,11 @@ IServiceCollection services = builder.Services;
 // Core Service Setup
 // ------------------------------------------------------------
 services.AddHealthChecks();
-services.AddControllers();
+services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    });
 services.AddEndpointsApiExplorer();
 
 Log.Logger = new LoggerConfiguration()
@@ -145,7 +151,9 @@ builder.Services
     .AddSingleton<IFeatureFlagService, FeatureFlagService>()
     .AddSingleton<IWordRushWebSocketService, WordRushWebSocketService>()
     .AddScoped<IScoringService, StopGameScoringService>()
-    .AddScoped<IGameSettingsService, GameSettingsService>();
+    .AddScoped<IGameSettingsService, GameSettingsService>()
+    .AddScoped<ICategoryColumns, CategoryColumnsService>()
+    .AddScoped<ICategoryTypes, CategoryTypesService>();
 
 builder.Host.UseSerilog();
 

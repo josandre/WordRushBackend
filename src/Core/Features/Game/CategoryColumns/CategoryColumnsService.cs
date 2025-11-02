@@ -1,32 +1,32 @@
 using Microsoft.EntityFrameworkCore;
-using WordRush.Core.Features.Game.C;
 using WordRush.Core.Features.Game.CategoryTypes;
 using WordRush.Repository;
 using WordRush.Repository.Models;
 
-namespace WordRush.Core.Features.Game.
+namespace WordRush.Core.Features.Game.CategoryColumns;
 
-public class GameCategoryService : IGameCategories
+public class CategoryColumnsService : ICategoryColumns
 {
   private readonly AppDbContext _dbContext;
-  private readonly CategoryTypesService _categoryTypesService;
+  private readonly ICategoryTypes _categoryTypesService;
 
-  public GameCategoryService(AppDbContext dbContext, CategoryTypesService categoryTypesService)
+  public CategoryColumnsService(AppDbContext dbContext, ICategoryTypes categoryTypesService)
   {
     _dbContext = dbContext;
     _categoryTypesService = categoryTypesService;
   }
 
-  public async Task<List<CategoryColumn>> GetDefaultCategories()
+  public async Task<CategoryType?> GetDefaultCategories()
   {
-   var defaultType = _categoryTypesService.GetDefaultType()
-   if (defaultType != null)
-   {
-     return await _dbContext.CategoryColumns
-       .Where(c => c.CategoryType.Id == defaultType.Id)
-       .ToListAsync();
-   }
+    var defaultType = await _categoryTypesService.GetDefaultType();
 
-   return null;
+    if (defaultType == null)
+    {
+      return null;
+    }
+
+    return await _dbContext.CategoryTypes
+      .Include(ct => ct.CategoryColumns)
+      .FirstOrDefaultAsync(ct => ct.Id == defaultType.Id);
   }
 }

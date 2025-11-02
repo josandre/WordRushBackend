@@ -24,6 +24,11 @@ namespace WordRush.Core.Features.Realtime
 
     public ConcurrentDictionary<string, string> UserToRoom { get; } = new();
 
+    public GameRoom? GetRoom(string roomId)
+    {
+      return Rooms.TryGetValue(roomId, out GameRoom? room) ? room : null;
+    }
+
     /// <summary>
     /// Checks all the existing rooms and generates a unique code for a new room.
     /// </summary>
@@ -119,7 +124,8 @@ namespace WordRush.Core.Features.Realtime
     /// <param name="message">The message itself.</param>
     public async Task BroadcastToRoomAsync(string roomId, string message)
     {
-      if (Rooms.TryGetValue(roomId, out GameRoom room))
+      GameRoom? room = GetRoom(roomId);
+      if (room != null)
       {
         await BroadcastToRoomAsync(room, message);
       }
@@ -168,7 +174,7 @@ namespace WordRush.Core.Features.Realtime
       room.RemoveParticipantSocket(socket);
 
       // Close the room for everyone if the owner leaves
-      if (userID == room.OwnerUserId)
+      if (userID == room.HostId)
       {
         // Send message, so everyone leaves the room
         string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
@@ -259,10 +265,13 @@ namespace WordRush.Core.Features.Realtime
       }
 
       // If the player is in a room, remove it from there
-      if (UserToRoom.TryGetValue(userId, out string roomID) &&
-          Rooms.TryGetValue(roomID, out GameRoom room))
+      if (UserToRoom.TryGetValue(userId, out string roomID))
       {
-        await OnPlayerLeftRoom(socket, room, userId);
+        GameRoom? room = GetRoom(roomID);
+        if (room != null)
+        {
+          await OnPlayerLeftRoom(socket, room, userId);
+        }
       }
 
       Console.WriteLine($"[CLEANUP] User {userId} fully removed from system.");

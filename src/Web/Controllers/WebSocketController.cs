@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using WordRush.Core.Features.Realtime;
 
 namespace WordRush.Web.Controllers;
 

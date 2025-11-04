@@ -4,9 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Serilog;
 using WordRush.Core.Features;
 using WordRush.Repository.Models;
-using WordRush.Web.Controllers;
 
-namespace WordRush.Web.Features.UserProfile
+namespace WordRush.Web.Controllers
 {
   [Authorize]
   [Route("api/userProfile")]

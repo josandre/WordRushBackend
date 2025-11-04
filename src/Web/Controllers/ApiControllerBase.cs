@@ -8,12 +8,12 @@ public class ApiControllerBase: ControllerBase
 {
   protected Uri GetCurrentRequestUriBase()
   {
-    var clientUrl = this.Request.Headers[CorsConstants.Origin].ToString();
+    string clientUrl = Request.Headers[CorsConstants.Origin].ToString();
     return new Uri(clientUrl);
   }
 
-  protected string GetUserEmail()
+  protected string? GetUserEmail()
   {
-    return this.User.FindFirst(ClaimTypes.Email)?.Value;
+    return User.FindFirst(ClaimTypes.Email)?.Value;
   }
 }

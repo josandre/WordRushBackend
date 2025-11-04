@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using LaunchDarkly.Logging;
+using Serilog;
 using WordRush.Core.Features.Realtime.MessageHandler;
 
 namespace WordRush.Core.Features.Realtime
@@ -63,7 +65,7 @@ namespace WordRush.Core.Features.Realtime
         userId = Guid.NewGuid().ToString();
         SocketToUser[socket] = userId;
 
-        Console.WriteLine($"[CONNECTED] New client assigned userId = {userId}");
+        Log.Warning($"[CONNECTED] New client assigned userId = {userId}");
       }
 
       byte[] buffer = new byte[1024 * 4];
@@ -94,7 +96,7 @@ namespace WordRush.Core.Features.Realtime
       }
       catch (Exception ex)
       {
-        Console.WriteLine($"[ERROR] Connection failed: {ex.Message}");
+        Log.Warning($"[ERROR] Connection failed: {ex.Message}");
         await CloseSocketSafely(socket);
       }
     }
@@ -217,9 +219,9 @@ namespace WordRush.Core.Features.Realtime
       // First, try to deserealize the received message
       try
       {
-        Console.WriteLine(message);
+        Log.Warning(message);
         WebSocketMessage webSocketMessage = JsonSerializer.Deserialize<WebSocketMessage>(message, options);
-        Console.WriteLine($"Deserialized: type: {webSocketMessage.Type}, data: {webSocketMessage.JsonData}");
+        Log.Warning($"Deserialized: type: {webSocketMessage.Type}, data: {webSocketMessage.JsonData}");
 
         // Then handle the message based on its type
         string[] typeParts = webSocketMessage.Type.Split("|");
@@ -235,22 +237,22 @@ namespace WordRush.Core.Features.Realtime
         }
         else
         {
-          Console.WriteLine($"Error: Incorrect format for WebSocket message type: {webSocketMessage.Type}");
+          Log.Warning($"Error: Incorrect format for WebSocket message type: {webSocketMessage.Type}");
         }
       }
       catch (Exception e)
       {
-        Console.WriteLine("ERROR: Couldn't parse the JSON from the WebSocket message." + e.Message);
+        Log.Warning("ERROR: Couldn't parse the JSON from the WebSocket message." + e.Message);
       }
     }
 
     private async Task HandleDisconnectAsync(WebSocket socket, string userId)
     {
-      Console.WriteLine($"[DISCONNECTED] userId = {userId}");
+      Log.Warning($"[DISCONNECTED] userId = {userId}");
 
       try
       {
-        // Gracefully close if still open
+        // Successfully close if still open
         if (socket.State == WebSocketState.Open)
         {
           await socket.CloseAsync(
@@ -261,7 +263,7 @@ namespace WordRush.Core.Features.Realtime
       }
       catch (Exception ex)
       {
-        Console.WriteLine($"[WARN] Error closing socket for {userId}: {ex.Message}");
+        Log.Warning($"[WARN] Error closing socket for {userId}: {ex.Message}");
       }
 
       // If the player is in a room, remove it from there
@@ -274,11 +276,17 @@ namespace WordRush.Core.Features.Realtime
         }
       }
 
-      Console.WriteLine($"[CLEANUP] User {userId} fully removed from system.");
+      Log.Warning($"[CLEANUP] User {userId} fully removed from system.");
     }
 
     private async Task CloseSocketSafely(WebSocket socket)
     {
+      if (socket == null)
+      {
+        Log.Warning("[CloseSocketSafely] Attempted to close a null WebSocket instance.");
+        return;
+      }
+
       try
       {
         if (socket.State is not WebSocketState.Closed and not WebSocketState.Aborted)
@@ -287,11 +295,20 @@ namespace WordRush.Core.Features.Realtime
               WebSocketCloseStatus.InternalServerError,
               "Internal server error",
               CancellationToken.None);
+          Log.Information("[CloseSocketSafely] Closed WebSocket sucessfully with InternalServerError status.");
         }
       }
-      catch
+      catch (WebSocketException ex)
       {
-        /* ignore cleanup exceptions */
+        Log.Warning(ex, "[CloseSocketSafely] WebSocketException occurred while closing socket. It may already be closed or aborted.");
+      }
+      catch (ObjectDisposedException)
+      {
+        Log.Debug("[CloseSocketSafely] WebSocket already disposed — ignoring.");
+      }
+      catch (Exception ex)
+      {
+        Log.Error(ex, "[CloseSocketSafely] Unexpected error while closing WebSocket.");
       }
     }
   }

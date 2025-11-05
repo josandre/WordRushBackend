@@ -3,7 +3,7 @@ namespace WordRush.Core.Features.Realtime
   public class WebSocketMessageTypeEnums
   {
     /// <summary>
-    /// First part of the type, it determines which message handler will take care of the event.
+    /// First part of the type, it determines which message handler will take care of the received event.
     /// </summary>
     public enum Categories
     {
@@ -20,7 +20,8 @@ namespace WordRush.Core.Features.Realtime
       JOIN,
       LEAVE,
       TOGGLE_READY,
-      REQUEST_DATA
+      REQUEST_DATA,
+      START_GAME
     }
 
     public enum GameRoomServerActions
@@ -29,21 +30,26 @@ namespace WordRush.Core.Features.Realtime
       JOINED,
       JOINED_NON_EXISTING_ROOM,
       DATA_UPDATED,
-      CLOSED
+      CLOSED,
+      GAME_STARTED
     }
 
     /// <summary>
     /// Actions that can be handled by the Game message handler.
     /// </summary>
-    public enum GameClientActions
+    public enum GameSessionClientActions
     {
+      READY_FOR_NEXT_ROUND,
       STOP,
+      SEND_ROUND_ANSWERS
     }
 
-    public enum GameServerActions
+    public enum GameSessionServerActions
     {
-      ON_ROUND_START,
-      ON_STOP
+      ROUND_STARTED,
+      ON_STOP,
+      ROUND_FINISHED,
+      ROUND_RESULTS_SENT
     }
   }
 }

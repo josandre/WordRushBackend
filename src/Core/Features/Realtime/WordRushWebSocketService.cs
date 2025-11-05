@@ -143,9 +143,9 @@ namespace WordRush.Core.Features.Realtime
 
       List<WebSocket> sockets = new();
 
-      lock (room.Participants)
+      lock (room.PlayerSockets)
       {
-        foreach (WebSocket socket in room.Participants)
+        foreach (WebSocket socket in room.PlayerSockets)
         {
           // TODO: Clear invalid sockets?
           if (socket.State == WebSocketState.Open)
@@ -170,11 +170,10 @@ namespace WordRush.Core.Features.Realtime
     public async Task OnPlayerLeftRoom(WebSocket socket, GameRoom room, string userID)
     {
       _ = UserToRoom.TryRemove(userID, out _);
-      room.RemoveUser(userID);
-      room.RemoveParticipantSocket(socket);
+      room.RemovePlayer(userID, socket);
 
       // Close the room for everyone if the owner leaves
-      if (userID == room.HostId)
+      if (userID == room.HostPlayerID)
       {
         // Send message, so everyone leaves the room
         string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
@@ -209,7 +208,7 @@ namespace WordRush.Core.Features.Realtime
       if (!initializedMessageHandlers)
       {
         _ = messageHandlers.TryAdd(WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString(), new GameRoomWebSocketMessageHandler());
-        _ = messageHandlers.TryAdd(WebSocketMessageTypeEnums.Categories.GAME.ToString(), new GameWebSocketMessageHandler());
+        _ = messageHandlers.TryAdd(WebSocketMessageTypeEnums.Categories.GAME.ToString(), new GameSessionWebSocketMessageHandler());
 
         initializedMessageHandlers = true;
       }

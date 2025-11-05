@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using LaunchDarkly.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using WordRush.Core.Features.Realtime.MessageHandler;
 
@@ -17,8 +18,18 @@ namespace WordRush.Core.Features.Realtime
 
     private readonly JsonSerializerOptions options = new()
     {
-      UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Skip
+      UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Skip,
+      ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
     };
+
+    private readonly IServiceScopeFactory _serviceScopeFactory;
+
+    public IServiceScopeFactory ServiceScopeFactory => _serviceScopeFactory;
+
+    public WordRushWebSocketService(IServiceScopeFactory serviceScopeFactory)
+    {
+      _serviceScopeFactory = serviceScopeFactory;
+    }
 
     public ConcurrentDictionary<string, GameRoom> Rooms { get; } = new();
 

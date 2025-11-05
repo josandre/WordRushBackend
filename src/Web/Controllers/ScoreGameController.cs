@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using WordRush.Core.Features.StopGame;
-using WordRush.Web.Controllers;
+using WordRush.Core.Features.Scoring;
+using WordRush.Core.Features.Scoring.Models;
 
-namespace WordRush.Web.Features.StopGame
+namespace WordRush.Web.Controllers
 {
   [Authorize]
   [Route("api/scoregame")]

@@ -1,52 +1,135 @@
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Logging;
-using WordRush.Core.Features.StopGame;
 using Microsoft.Extensions.Configuration;
+using Serilog;
+using WordRush.Core.Features.Scoring.Models;
+
 namespace WordRush.Core.Features.Scoring
 {
-  public class StopGameScoringService : IScoringService
+  public class StopGameScoringService(IHttpClientFactory httpClientFactory, IConfiguration config) : IScoringService
   {
-    private readonly HttpClient _httpClient;
-    private readonly ILogger<StopGameScoringService> logger;
-    private readonly string ollamaModel;
-    private readonly string ollamaBaseUrl;
-    public StopGameScoringService(IHttpClientFactory httpClientFactory, ILogger<StopGameScoringService> logger, IConfiguration config)
+    private readonly HttpClient _httpClient = httpClientFactory.CreateClient();
+    private readonly string ollamaModel = config["Ollama:Model"] ?? "llama3.1";
+    private readonly string ollamaBaseUrl = config["Ollama:BaseUrl"] ?? "http://localhost:11434/api/generate";
+
+    // ----------------------------------------------------------
+    // BACKEND VALIDATION RULES
+    // ----------------------------------------------------------
+    private static void ValidateBasicRules(StopGameRequest request)
     {
-      _httpClient = httpClientFactory.CreateClient();
-      this.logger = logger;
-      // Read Ollama settings from appsettings.json
-      ollamaModel = config["Ollama:Model"] ?? "llama3";
-      ollamaBaseUrl = config["Ollama:BaseUrl"] ?? "http://localhost:11434/api/generate";
+      if (string.IsNullOrWhiteSpace(request.Letter))
+      {
+        throw new ArgumentException("Letter cannot be empty.");
+      }
+
+      if (request.Categories == null || request.Categories.Count == 0)
+      {
+        throw new ArgumentException("Categories cannot be empty.");
+      }
+
+      if (request.Players == null || request.Players.Count == 0)
+      {
+        throw new ArgumentException("Players cannot be empty.");
+      }
     }
 
+    private void ApplyBackendRules(StopGameRequest original, StopGameResponse parsed)
+    {
+      string letter = original.Letter.ToUpperInvariant();
+
+      Dictionary<string, List<string>> allAnswers = [];
+      foreach (string category in original.Categories)
+      {
+        allAnswers[category] = [..original.Players
+          .Select(p => p.Answers.ContainsKey(category) ? p.Answers[category]?.Trim() ?? string.Empty : string.Empty)
+          .Where(a => !string.IsNullOrEmpty(a))
+          .Select(a => a.ToLowerInvariant())];
+      }
+
+      foreach (PlayerResult player in parsed.Players)
+      {
+        foreach (string category in parsed.Categories)
+        {
+          string answer = player.Answers.ContainsKey(category)
+            ? player.Answers[category]?.Trim() ?? string.Empty
+            : string.Empty;
+
+          CategoryScore score = player.Scores.ContainsKey(category)
+            ? player.Scores[category]
+            : new CategoryScore { Points = 0, Reason = "Missing from model output" };
+
+          if (string.IsNullOrWhiteSpace(answer))
+          {
+            score.Points = 0;
+            score.Reason = "No answer provided";
+          }
+          else if (answer.Length == 1)
+          {
+            score.Points = 0;
+            score.Reason = "Single letter only";
+          }
+          else if (!answer.StartsWith(letter, StringComparison.OrdinalIgnoreCase))
+          {
+            score.Points = 0;
+            score.Reason = $"Does not start with the letter '{letter}'";
+          }
+          else
+          {
+            int count = allAnswers[category].Count(a => a == answer.ToLowerInvariant());
+            if (count > 1)
+            {
+              if (score.Points > 0)
+              {
+                score.Points = 5;
+                score.Reason = "Valid word but duplicated by another player";
+              }
+            }
+            else if (score.Points > 0)
+            {
+              score.Points = 10;
+              score.Reason = "Valid and unique word";
+            }
+          }
+
+          player.Scores[category] = score;
+        }
+
+        player.Total = player.Scores.Values.Sum(s => s.Points);
+      }
+    }
+
+    // ----------------------------------------------------------
+    // MAIN ENTRY POINT
+    // ----------------------------------------------------------
     public async Task<StopGameResponse?> ScoreGameAsync(StopGameRequest request)
     {
+      ValidateBasicRules(request);
+
       string prompt = BuildPrompt(request);
       string modelOutput = await SendToModelAsync(prompt);
 
-      logger.LogInformation($"Ollama raw output (first 200 chars): {modelOutput[..Math.Min(200, modelOutput.Length)]}");
+      Log.Information("Ollama raw output : \n{Output}", modelOutput);
 
       StopGameResponse? parsed = ParseResponse(modelOutput, request);
 
       if (parsed == null)
       {
-        logger.LogWarning("Ollama returned no structured output. Returning fallback response.");
+        Log.Warning("Ollama returned no structured output. Returning fallback response.");
 
-        StopGameResponse fallback = new StopGameResponse
+        StopGameResponse fallback = new()
         {
           Letter = request.Letter,
           Categories = request.Categories,
-          Players = new List<PlayerResult>()
+          Players = []
         };
 
         foreach (PlayerEntry player in request.Players)
         {
-          PlayerResult result = new PlayerResult
+          PlayerResult result = new()
           {
             Name = player.Name,
             Answers = player.Answers,
-            Scores = new Dictionary<string, CategoryScore>()
+            Scores = []
           };
 
           foreach (string category in request.Categories)
@@ -65,83 +148,68 @@ namespace WordRush.Core.Features.Scoring
         return fallback;
       }
 
+      ApplyBackendRules(request, parsed);
       return parsed;
     }
 
     // ----------------------------------------------------------
-    // Prompt Builder
+    // PROMPT BUILDER (Semantic Validation Only)
     // ----------------------------------------------------------
     public string BuildPrompt(StopGameRequest request)
     {
-      StringBuilder builder = new StringBuilder();
+      StringBuilder sb = new();
 
-      builder.AppendLine("You are a strict JSON scoring engine for the word game STOP.");
-      builder.AppendLine("You receive a list of players, categories, and their answers.");
-      builder.AppendLine("Your task is to assign scores to each answer according to the rules, include the original answers, compute the total score per player, and include the categories list in the output.");
-      builder.AppendLine();
-      builder.AppendLine("Rules:");
-      builder.AppendLine("1. Only words that start with the given letter are valid.");
-      builder.AppendLine("2. The word must match the category meaning.");
-      builder.AppendLine("3. Valid and unique answers = 10 points.");
-      builder.AppendLine("4. Valid but duplicated answers = 5 points.");
-      builder.AppendLine("5. Invalid, missing, or wrong-letter answers = 0 points.");
-      builder.AppendLine("6. Each player must have a 'total' field equal to the sum of all category points.");
-      builder.AppendLine("7. The top-level JSON object must include 'letter', 'categories', and 'players'.");
-      builder.AppendLine();
-      builder.AppendLine("### Output format:");
-      builder.AppendLine("Respond only with valid JSON — no markdown, no commentary, no explanations.");
-      builder.AppendLine("Each player must include both 'answers', 'scores', and a numeric 'total'.");
-      builder.AppendLine();
-      builder.AppendLine("Example structure:");
-      builder.AppendLine("{");
-      builder.AppendLine("  \"letter\": \"S\",");
-      builder.AppendLine("  \"categories\": [\"Name\", \"Animal\", \"Food\", \"Country\", \"Color\", \"Object\"],");
-      builder.AppendLine("  \"players\": [");
-      builder.AppendLine("    {");
-      builder.AppendLine("      \"name\": \"Alice\",");
-      builder.AppendLine("      \"answers\": {");
-      builder.AppendLine("        \"Name\": \"Samuel\",");
-      builder.AppendLine("        \"Animal\": \"Snake\",");
-      builder.AppendLine("        \"Food\": \"Soup\",");
-      builder.AppendLine("        \"Country\": \"Spain\",");
-      builder.AppendLine("        \"Color\": \"Silver\",");
-      builder.AppendLine("        \"Object\": \"Spoon\"");
-      builder.AppendLine("      },");
-      builder.AppendLine("      \"scores\": {");
-      builder.AppendLine("        \"Name\": { \"points\": 10, \"reason\": \"Valid and unique word\" },");
-      builder.AppendLine("        \"Animal\": { \"points\": 5, \"reason\": \"Valid word but duplicated by another player\" },");
-      builder.AppendLine("        \"Food\": { \"points\": 10, \"reason\": \"Valid and unique word\" },");
-      builder.AppendLine("        \"Country\": { \"points\": 5, \"reason\": \"Valid word but duplicated by another player\" },");
-      builder.AppendLine("        \"Color\": { \"points\": 5, \"reason\": \"Valid word but duplicated by another player\" },");
-      builder.AppendLine("        \"Object\": { \"points\": 5, \"reason\": \"Valid word but duplicated by another player\" }");
-      builder.AppendLine("      },");
-      builder.AppendLine("      \"total\": 40");
-      builder.AppendLine("    }");
-      builder.AppendLine("  ]");
-      builder.AppendLine("}");
-      builder.AppendLine();
-      builder.AppendLine("### Input data:");
-      builder.AppendLine($"Letter: {request.Letter}");
-      builder.AppendLine($"Categories: {string.Join(", ", request.Categories)}");
-      builder.AppendLine("Players and their answers:");
-
+      _ = sb.AppendLine("You are a strict JSON scoring engine for the word game STOP.");
+      _ = sb.AppendLine("You will receive a list of players, categories, and their answers.");
+      _ = sb.AppendLine("Your task is to determine if each answer is a real existing word or name that fits its category meaning.");
+      _ = sb.AppendLine();
+      _ = sb.AppendLine("### Rules for Evaluation");
+      _ = sb.AppendLine("1. Do NOT check if the word starts with the given letter, or if it’s duplicated. The backend enforces those.");
+      _ = sb.AppendLine("2. Assign points only based on semantic correctness and existence:");
+      _ = sb.AppendLine("   - If the word exists and fits the category → { points: 10, reason: 'Valid word for category' }.");
+      _ = sb.AppendLine("   - If the word exists but clearly does NOT fit the category meaning → { points: 0, reason: 'Word does not fit category meaning' }.");
+      _ = sb.AppendLine("   - If the word is invented, nonsense, or not an existing word → { points: 0, reason: 'Word does not exist or is invalid' }.");
+      _ = sb.AppendLine("3. Treat fictional or mythological names as valid if they are well-known and fit the context of the category. For example:");
+      _ = sb.AppendLine("   - Category: 'Famous Person' → Accept 'Clark Kent', 'Sherlock Holmes', 'Darth Vader'.");
+      _ = sb.AppendLine("   - Category: 'Animal' → Reject human names, but accept real species like 'Cat', 'Cheetah'.");
+      _ = sb.AppendLine("4. Always include a clear reason for each answer’s score.");
+      _ = sb.AppendLine("5. Return only valid JSON with no commentary or markdown.");
+      _ = sb.AppendLine();
+      _ = sb.AppendLine("### Output Format");
+      _ = sb.AppendLine("{");
+      _ = sb.AppendLine("  \"letter\": string,");
+      _ = sb.AppendLine("  \"categories\": string[],");
+      _ = sb.AppendLine("  \"players\": [");
+      _ = sb.AppendLine("    {");
+      _ = sb.AppendLine("      \"name\": string,");
+      _ = sb.AppendLine("      \"answers\": { \"<Category>\": \"<Answer>\", ... },");
+      _ = sb.AppendLine("      \"scores\": { \"<Category>\": { \"points\": number, \"reason\": string }, ... },");
+      _ = sb.AppendLine("      \"total\": number");
+      _ = sb.AppendLine("    }");
+      _ = sb.AppendLine("  ]");
+      _ = sb.AppendLine("}");
+      _ = sb.AppendLine();
+      _ = sb.AppendLine("### Notes");
+      _ = sb.AppendLine("- Be neutral, concise, and consistent.");
+      _ = sb.AppendLine("- Always keep the same number of categories and players as provided.");
+      _ = sb.AppendLine("- Do not modify or correct the answers.");
+      _ = sb.AppendLine("- Compute the 'total' for each player as the sum of all their category points.");
+      _ = sb.AppendLine();
+      _ = sb.AppendLine("### Input Data");
+      _ = sb.AppendLine(JsonSerializer.Serialize(request, new JsonSerializerOptions { WriteIndented = true }));
+      _ = sb.AppendLine();
+      _ = sb.AppendLine("Return ONLY valid JSON following the exact format above.");
+      _ = sb.AppendLine("Every 'answers' and 'scores' field must be a dictionary with one entry per category.");
       foreach (PlayerEntry player in request.Players)
       {
-        builder.AppendLine($"- {player.Name}: {JsonSerializer.Serialize(player.Answers)}");
+        _ = sb.AppendLine($"- {player.Name}: {JsonSerializer.Serialize(player.Answers)}");
       }
 
-      builder.AppendLine();
-      builder.AppendLine("Return ONLY valid JSON following the exact structure above, including:");
-      builder.AppendLine("1. 'letter' at the top");
-      builder.AppendLine("2. 'categories' array with all categories");
-      builder.AppendLine("3. 'players' array, where each player includes 'answers', 'scores', and 'total'.");
-
-      return builder.ToString();
+      return sb.ToString();
     }
 
-
     // ----------------------------------------------------------
-    // Send Prompt to Ollama (Non-streamed)
+    // SEND PROMPT TO OLLAMA
     // ----------------------------------------------------------
     public async Task<string> SendToModelAsync(string _prompt)
     {
@@ -151,105 +219,117 @@ namespace WordRush.Core.Features.Scoring
         {
           model = ollamaModel,
           prompt = _prompt,
-          stream = false
+          stream = false,
+          options = new { temperature = 0.2, num_ctx = 4096 }
         };
 
-        var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        var response = await _httpClient.PostAsync(ollamaBaseUrl, content);
+        StringContent content = new(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        HttpResponseMessage response = await _httpClient.PostAsync(ollamaBaseUrl, content);
 
         if (!response.IsSuccessStatusCode)
         {
           string err = await response.Content.ReadAsStringAsync();
-          logger.LogError($"Ollama API returned error: {response.StatusCode} - {err}");
+          Log.Error("Ollama API returned error: {Status} - {Message}", response.StatusCode, err);
           return string.Empty;
         }
 
         string json = await response.Content.ReadAsStringAsync();
 
-        // Extract inner JSON from Ollama’s response
         using JsonDocument doc = JsonDocument.Parse(json);
-        if (doc.RootElement.TryGetProperty("response", out var inner))
+        if (doc.RootElement.TryGetProperty("response", out JsonElement inner))
         {
           string innerText = inner.GetString() ?? string.Empty;
           int firstBrace = innerText.IndexOf('{');
           if (firstBrace >= 0)
-            innerText = innerText.Substring(firstBrace);
+          {
+            innerText = innerText[firstBrace..];
+          }
+
           return innerText.Trim();
         }
 
-        logger.LogWarning("Ollama response did not contain a 'response' field.");
+        Log.Warning("Ollama response did not contain a 'response' field.");
         return string.Empty;
       }
       catch (Exception ex)
       {
-        logger.LogError(ex, "Error calling Ollama API");
+        Log.Error(ex, "Error calling Ollama API");
         return string.Empty;
       }
     }
 
     // ----------------------------------------------------------
-    // Parse Ollama Response
+    // PARSE OLLAMA RESPONSE
     // ----------------------------------------------------------
     public StopGameResponse? ParseResponse(string responseText, StopGameRequest originalRequest)
     {
       try
       {
-        logger.LogInformation("Raw Ollama output: {Text}", responseText);
-
         if (string.IsNullOrWhiteSpace(responseText))
         {
-          logger.LogWarning("Ollama response is empty.");
+          Log.Warning("Ollama response is empty.");
           return null;
         }
 
-        // Extract the first valid JSON block (in case model adds text before/after)
+        // Step 1: Extract valid JSON block
         int firstBrace = responseText.IndexOf('{');
         int lastBrace = responseText.LastIndexOf('}');
         if (firstBrace == -1 || lastBrace == -1 || lastBrace <= firstBrace)
         {
-          logger.LogWarning("No valid JSON braces found in Ollama output.");
+          Log.Warning("No valid JSON braces found in Ollama output.");
           return null;
         }
 
         string jsonOnly = responseText.Substring(firstBrace, lastBrace - firstBrace + 1);
 
+        // Step 2: Sanitize obvious bad characters (e.g., /Brazil/ -> "Brazil")
+        jsonOnly = System.Text.RegularExpressions.Regex.Replace(
+                    jsonOnly,
+                    @"(?<=:\s*)/([^/]+)/",
+                    "\"$1\""
+                  );
+
+        // Step 3: Trim markdown markers or accidental text from LLM
+        int jsonStart = jsonOnly.IndexOf('{');
+        int jsonEnd = jsonOnly.LastIndexOf('}');
+        if (jsonStart >= 0 && jsonEnd > jsonStart)
+        {
+          jsonOnly = jsonOnly.Substring(jsonStart, jsonEnd - jsonStart + 1);
+        }
+
+        // Step 4: Attempt to deserialize
         StopGameResponse? parsed = JsonSerializer.Deserialize<StopGameResponse>(
-            jsonOnly,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+          jsonOnly,
+          new JsonSerializerOptions
+          {
+            PropertyNameCaseInsensitive = true,
+            ReadCommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true
+          });
 
         if (parsed == null)
         {
-          logger.LogWarning("Deserialized response is null.");
+          Log.Warning("Deserialized response is null.");
           return null;
         }
 
-        // ✅ Safeguard 1: if categories are missing or empty, reuse original request categories
+        // Step 5: Rebuild missing fields
         if (parsed.Categories == null || parsed.Categories.Count == 0)
         {
-          parsed.Categories = new List<string>(originalRequest.Categories);
-          logger.LogInformation("Categories missing from Ollama output — using original request categories.");
+          parsed.Categories = [.. originalRequest.Categories];
         }
 
-        // ✅ Safeguard 2: ensure letter consistency
         if (string.IsNullOrWhiteSpace(parsed.Letter))
         {
           parsed.Letter = originalRequest.Letter;
         }
 
-        // ✅ Safeguard 3: ensure all players have initialized answers, scores, and totals
         foreach (PlayerResult player in parsed.Players)
         {
-          if (player.Answers == null)
-          {
-            player.Answers = new Dictionary<string, string>();
-          }
+          player.Answers ??= [];
 
-          if (player.Scores == null)
-          {
-            player.Scores = new Dictionary<string, CategoryScore>();
-          }
+          player.Scores ??= [];
 
-          // ✅ Sanity Scoring Patch: ensure every category is present in Scores
           foreach (string category in parsed.Categories)
           {
             if (!player.Scores.ContainsKey(category))
@@ -259,20 +339,23 @@ namespace WordRush.Core.Features.Scoring
                 Points = 0,
                 Reason = "Missing from model output"
               };
-              logger.LogInformation("Patched missing category '{Category}' for player '{Player}'.", category, player.Name);
             }
           }
 
-          // ✅ Ensure total is correct (sum of all category points)
-          int computedTotal = player.Scores.Values.Sum(s => s.Points);
-          player.Total = computedTotal;
+          player.Total = player.Scores.Values.Sum(s => s.Points);
         }
 
         return parsed;
       }
+      catch (JsonException jex)
+      {
+        Log.Error(jex, "JSON parse error when decoding Ollama response.");
+        Log.Error("Ollama raw JSON before failure:\n{Raw}", responseText);
+        return null;
+      }
       catch (Exception ex)
       {
-        logger.LogError(ex, "Failed to parse Ollama response");
+        Log.Error(ex, "Unexpected error while parsing Ollama response.");
         return null;
       }
     }

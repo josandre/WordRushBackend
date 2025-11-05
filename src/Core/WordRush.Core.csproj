@@ -11,6 +11,7 @@
     <Compile Remove="Features\ProfileService.cs" />
     <Compile Remove="Features\Scoring\MockScoringService.cs" />
     <Compile Remove="Features\Scoring\MockWordDictionary.cs" />
+    <Compile Remove="Features\Scoring\StopGame.cs" />
     <Compile Remove="GlobalSuppressions.cs" />
   </ItemGroup>
 

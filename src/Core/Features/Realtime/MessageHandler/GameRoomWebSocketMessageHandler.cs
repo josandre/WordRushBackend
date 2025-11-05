@@ -1,8 +1,12 @@
+using System.Linq;
 using System.Net.WebSockets;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using WordRush.Core.Features.Game.CategoryTypes;
 using WordRush.Core.Features.Realtime.Models;
 using WordRush.Core.Features.Realtime.Models.CreateRoom;
 using WordRush.Core.Features.Realtime.Models.JoinRoom;
+using WordRush.Repository.Models;
 
 namespace WordRush.Core.Features.Realtime.MessageHandler
 {
@@ -53,15 +57,32 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
       room.AddParticipantSocket(socket);
       room.AddUser(userID, createRoomEvent.PlayerProfile);
 
-      Console.WriteLine($"[GAME ROOM] The profile: Nickname: {createRoomEvent.PlayerProfile.Nickname} Email: {createRoomEvent.PlayerProfile.Email}");
-      Console.WriteLine($"[GAME ROOM] Room with ID: {room.RoomId} created by User {userID}");
+      CategoryType? categoryType;
+      using (var scope = webSocketService.ServiceScopeFactory.CreateScope())
+      {
+        var categoryTypesService = scope.ServiceProvider.GetRequiredService<ICategoryTypes>();
+        categoryType = await categoryTypesService.GetDefaultTypeWithColumns();
+
+        if (categoryType != null && categoryType.CategoryColumns.Any())
+        {
+          categoryType = new CategoryType
+          {
+            Id = categoryType.Id,
+            Name = categoryType.Name,
+            CategoryColumns = categoryType.CategoryColumns.Select(col => new CategoryColumn
+            {
+              Id = col.Id,
+              Column = col.Column
+            }).ToList()
+          };
+        }
+      }
 
       GameRoomCreatedEvent roomCreatedEventData = new GameRoomCreatedEvent(room.RoomId)
       {
-        Settings = room.Settings
+        Settings = room.Settings,
+        CategoryType = categoryType
       };
-
-      Console.WriteLine($"[GAME ROOM]GameRoomCreatedEvent {roomCreatedEventData.Settings}");
 
       string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
       string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.CREATED.ToString();

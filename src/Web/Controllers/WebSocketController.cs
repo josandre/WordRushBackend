@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using WordRush.Core.Features.Realtime;
 
 namespace WordRush.Web.Controllers;
 
@@ -10,7 +9,7 @@ public class WebSocketController(IWordRushWebSocketService wsService) : ApiContr
   [HttpGet]
   public async Task HandleAsync()
   {
-    var context = HttpContext;
+    HttpContext context = HttpContext;
     if (!context.WebSockets.IsWebSocketRequest)
     {
       context.Response.StatusCode = StatusCodes.Status400BadRequest;

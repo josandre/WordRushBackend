@@ -59,7 +59,12 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
       Console.WriteLine($"[GAME ROOM] The profile: Nickname: {createRoomEvent.PlayerProfile.Nickname} Email: {createRoomEvent.PlayerProfile.Email}");
       Console.WriteLine($"[GAME ROOM] Room with ID: {room.RoomId} created by User {userID}");
 
-      GameRoomCreatedEvent roomCreatedEventData = new GameRoomCreatedEvent(room.RoomId);
+      GameRoomCreatedEvent roomCreatedEventData = new GameRoomCreatedEvent(room.RoomId)
+      {
+        Settings = room.Settings
+      };
+
+      Console.WriteLine($"[GAME ROOM]GameRoomCreatedEvent {roomCreatedEventData.Settings}");
 
       string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
       string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.CREATED.ToString();

@@ -25,12 +25,16 @@ namespace WordRush.Web.Features.StopGame
     public async Task<IActionResult> Score([FromBody] StopGameRequest request)
     {
       if (request == null)
+      {
         return BadRequest("Invalid request payload.");
+      }
 
-      var result = await _scoringService.ScoreGameAsync(request);
+      StopGameResponse? result = await _scoringService.ScoreGameAsync(request);
 
       if (result == null)
+      {
         return StatusCode(500, "Scoring service returned no result.");
+      }
 
       return Ok(result);
     }

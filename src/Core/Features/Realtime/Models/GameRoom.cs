@@ -1,78 +1,41 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using WordRush.Core.Features.Realtime.Models;
+using WordRush.Core.Features.Realtime.Models.GameSession;
 using WordRush.Repository.Models;
 
 public class GameRoom
 {
-  private readonly object _lock = new();
-
   public string RoomId { get; }
+
+  public string HostPlayerID { get; set; } = string.Empty;
 
   public bool Active { get; set; } = true;
 
   public bool InGame { get; set; } = false;
 
+  public ConcurrentDictionary<string, UserProfile> Players { get; } = new();
+
+  public ConcurrentDictionary<string, bool> PlayersReadyStatus { get; } = new();
+
+  public GameSession Session { get; set; } = new();
+
   public GameSettings Settings { get; set; } = new();
 
-  public string StartTime { get; set; } = string.Empty;
+  public List<WebSocket> PlayerSockets { get; } = new();
 
-  public string EndTime { get; set; } = string.Empty;
-
-  public string HostId { get; set; } = string.Empty;
-
-  public List<User> Players { get; set; } = new();
-
-  public List<WebSocket> Participants { get; } = new();
-
-  public ConcurrentDictionary<string, bool> ReadyStatus { get; } = new();
-
-  public ConcurrentDictionary<string, UserProfile> Profiles { get; } = new();
-
-  public bool IsEmpty => Participants.Count == 0;
-
-  public bool AllReady => ReadyStatus.Values.All(v => v);
+  private readonly object _lock = new();
 
   public GameRoom(string roomId)
   {
     RoomId = roomId;
   }
 
-  public void AddParticipantSocket(WebSocket socket)
+  public void ToggleReadyStateForPlayer(string userId)
   {
     lock (_lock)
     {
-      if (!Participants.Contains(socket))
-      {
-        Participants.Add(socket);
-      }
-    }
-  }
-
-  public void RemoveParticipantSocket(WebSocket socket)
-  {
-    lock (_lock)
-    {
-      _ = Participants.Remove(socket);
-    }
-  }
-
-  public List<string> GetUserIds(ConcurrentDictionary<WebSocket, string> userMap)
-  {
-    lock (_lock)
-    {
-      return Participants
-        .Where(userMap.ContainsKey)
-        .Select(s => userMap[s])
-        .ToList();
-    }
-  }
-
-  public void ToggleReady(string userId)
-  {
-    lock (_lock)
-    {
-      ReadyStatus[userId] = !ReadyStatus.GetValueOrDefault(userId, false);
+      PlayersReadyStatus[userId] = !PlayersReadyStatus.GetValueOrDefault(userId, false);
     }
   }
 
@@ -82,34 +45,30 @@ public class GameRoom
     {
       GameSettings currentSettings = Settings;
 
-      ICollection<string> keys = Profiles.Keys.Any()
-        ? Profiles.Keys
-        : ReadyStatus.Keys;
-
       RoomDataRequestedEvent roomData = new()
       {
         Settings = new GameSettings
         {
           TimeLimit = currentSettings.TimeLimit,
           Order = currentSettings.Order,
-          Letters = currentSettings.Letters != null ? currentSettings.Letters.ToArray() : Array.Empty<string>()
+          Letters = currentSettings.Letters != null ? currentSettings.Letters : Array.Empty<string>()
         }
       };
 
-      IEnumerator<string> userIDs = Profiles.Keys.GetEnumerator();
+      IEnumerator<string> userIDs = Players.Keys.GetEnumerator();
       while (userIDs.MoveNext())
       {
         string userID = userIDs.Current;
 
-        if (Profiles.TryGetValue(userID, out UserProfile profile))
+        if (Players.TryGetValue(userID, out UserProfile profile))
         {
           roomData.Players.Add(new RoomDataPlayer
           {
             UserId = userID,
             Nickname = profile?.Nickname ?? $"Player-{userID[..5]}",
             Avatar = profile?.Avatar ?? string.Empty,
-            IsReady = ReadyStatus.GetValueOrDefault(userID, false),
-            IsOwner = userID == HostId
+            IsReady = PlayersReadyStatus.GetValueOrDefault(userID, false),
+            IsOwner = userID == HostPlayerID
           });
         }
       }
@@ -118,59 +77,34 @@ public class GameRoom
     }
   }
 
-  public List<RoomDataPlayer> GetPlayerSnapshots()
+  public void AddPlayer(string userID, UserProfile? profile, WebSocket socket)
   {
     lock (_lock)
     {
-      ICollection<string> keys = Profiles.Keys.Any()
-        ? Profiles.Keys
-        : ReadyStatus.Keys;
-
-      return keys.Select(userId =>
+      if (!Players.TryGetValue(userID, out _))
       {
-        _ = Profiles.TryGetValue(userId, out UserProfile? profile);
-        return new RoomDataPlayer
-        {
-          UserId = userId,
-          Nickname = profile?.Nickname ?? $"Player-{userId[..5]}",
-          Avatar = profile?.Avatar ?? string.Empty,
-          IsReady = ReadyStatus.GetValueOrDefault(userId, false),
-          IsOwner = userId == HostId
-        };
-      }).ToList();
-    }
-  }
-
-  public List<WebSocket> GetParticipantsSnapshot()
-  {
-    lock (_lock)
-    {
-      return Participants.ToList();
-    }
-  }
-
-  public void AddUser(string userID, UserProfile? profile)
-  {
-    lock (_lock)
-    {
-      if (!Profiles.TryGetValue(userID, out _))
-      {
-        _ = Profiles.TryAdd(userID, profile);
+        _ = Players.TryAdd(userID, profile);
       }
 
-      if (!ReadyStatus.TryGetValue(userID, out _))
+      if (!PlayersReadyStatus.TryGetValue(userID, out _))
       {
-        _ = ReadyStatus.TryAdd(userID, false);
+        _ = PlayersReadyStatus.TryAdd(userID, false);
+      }
+
+      if (!PlayerSockets.Contains(socket))
+      {
+        PlayerSockets.Add(socket);
       }
     }
   }
 
-  public void RemoveUser(string userID)
+  public void RemovePlayer(string userID, WebSocket socket)
   {
     lock (_lock)
     {
-      _ = Profiles.TryRemove(userID, out _);
-      _ = ReadyStatus.TryRemove(userID, out _);
+      _ = Players.TryRemove(userID, out _);
+      _ = PlayersReadyStatus.TryRemove(userID, out _);
+      _ = PlayerSockets.Remove(socket);
     }
   }
 
@@ -183,22 +117,62 @@ public class GameRoom
 
     lock (_lock)
     {
-      Settings = new GameSettings
-      {
-        TimeLimit = settings.TimeLimit,
-        Order = settings.Order,
-        Letters = settings.Letters != null ? settings.Letters.ToArray() : Array.Empty<string>()
-      };
+      Settings = settings;
     }
   }
-}
 
-[Serializable]
-public class UserProfile
-{
-  public string Nickname { get; set; } = "Player";
+  public void PrepareGameSession()
+  {
+    lock (_lock)
+    {
+      Session = new();
 
-  public string Avatar { get; set; } = string.Empty;
+      // TODO: Actually get the letters and timer based on the game settings
+      Session.Setup(new string[] { "A", "B", "C" });
+    }
+  }
 
-  public string Email { get; set; } = string.Empty;
+  /// <summary>
+  /// Called when a player is ready to start the next session phase.
+  /// </summary>
+  /// <param name="userID">The User that is ready for the next phase.</param>
+  /// <returns>If the session started the next phase or not.</returns>
+  public bool OnPlayerReadyForNextPhase(string userID)
+  {
+    lock (_lock)
+    {
+      Session.OnPlayerReadyForNextRound(userID);
+      Console.WriteLine($"Players ready for round: {Session.GetNumberOfPlayersReadyForNextRound()}, Total players: {Players.Count}");
+      if (Session.GetNumberOfPlayersReadyForNextRound() >= Players.Count)
+      {
+        SessionState sessionState = Session.GetSessionState();
+        Console.WriteLine("--- Session state: " + sessionState.ToString());
+        if (sessionState is SessionState.WaitingPlayersToJoin or SessionState.InRoundResults)
+        {
+          Console.WriteLine("--- Starting new round");
+          Session.StartNewRound();
+        }
+
+        return true;
+      }
+
+      return false;
+    }
+  }
+
+  public SessionState GetSessionState()
+  {
+    lock (_lock)
+    {
+      return Session.GetSessionState();
+    }
+  }
+
+  public void OnPlayerStop()
+  {
+    lock (_lock)
+    {
+      Session.OnStop();
+    }
+  }
 }

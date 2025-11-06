@@ -6,6 +6,7 @@ using Serilog;
 using WordRush.Core.Features.Game.CategoryTypes;
 using WordRush.Core.Features.Realtime.Models;
 using WordRush.Core.Features.Realtime.Models.CreateRoom;
+using WordRush.Core.Features.Realtime.Models.GameSession;
 using WordRush.Core.Features.Realtime.Models.JoinRoom;
 using WordRush.Repository.Models;
 
@@ -38,6 +39,9 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
         case WebSocketMessageTypeEnums.GameRoomClientActions.REQUEST_DATA:
           await RequestRoomData(webSocketService, userID);
           break;
+        case WebSocketMessageTypeEnums.GameRoomClientActions.START_GAME:
+          await StartGame(webSocketService, userID);
+          break;
         default:
           break;
       }
@@ -49,14 +53,13 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
 
       GameRoom room = new(webSocketService.GenerateValidRoomID())
       {
-        HostId = userID
+        HostPlayerID = userID
       };
 
       webSocketService.UserToRoom[userID] = room.RoomId;
       webSocketService.Rooms[room.RoomId] = room;
 
-      room.AddParticipantSocket(socket);
-      room.AddUser(userID, createRoomEvent.PlayerProfile);
+      room.AddPlayer(userID, createRoomEvent.PlayerProfile, socket);
 
       CategoryType? categoryType;
       using (var scope = webSocketService.ServiceScopeFactory.CreateScope())
@@ -124,8 +127,7 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
       {
         webSocketService.UserToRoom[userID] = room.RoomId;
 
-        room.AddParticipantSocket(socket);
-        room.AddUser(userID, joinGameRoomEvent.PlayerProfile);
+        room.AddPlayer(userID, joinGameRoomEvent.PlayerProfile, socket);
 
         await BroadcastRoomData(webSocketService, room);
 
@@ -194,7 +196,7 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
         GameRoom? room = webSocketService.GetRoom(roomID);
         if (room != null)
         {
-          room.ToggleReady(userID);
+          room.ToggleReadyStateForPlayer(userID);
           await BroadcastRoomData(webSocketService, room);
         }
       }
@@ -208,6 +210,26 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
         if (room != null)
         {
           await BroadcastRoomData(webSocketService, room);
+        }
+      }
+    }
+
+    private async Task StartGame(WordRushWebSocketService webSocketService, string userID)
+    {
+      if (webSocketService.UserToRoom.TryGetValue(userID, out string roomID))
+      {
+        GameRoom? room = webSocketService.GetRoom(roomID);
+        if (room != null)
+        {
+          // Prepare game session
+          room.PrepareGameSession();
+
+          // Send message
+          string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
+          string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.GAME_STARTED.ToString();
+
+          WebSocketMessage message = new(messageCategory, messageAction, "{}");
+          await webSocketService.BroadcastToRoomAsync(room.RoomId, JsonSerializer.Serialize(message));
         }
       }
     }

@@ -52,7 +52,7 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
         if (sessionState == SessionState.InRound)
         {
           // Send message
-          string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
+          string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_SESSION.ToString();
           string messageAction = WebSocketMessageTypeEnums.GameSessionServerActions.ROUND_STARTED.ToString();
 
           // Broadcast the new phase to all players in the room
@@ -64,6 +64,7 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
 
     public async Task OnPlayerStop(WordRushWebSocketService webSocketService, string userID)
     {
+      Console.WriteLine("STOP CALLED FROM CLIENT WAHOO");
       if (webSocketService.UserToRoom.TryGetValue(userID, out string roomID))
       {
         GameRoom room = webSocketService.GetRoom(roomID);
@@ -83,7 +84,7 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
         room.OnPlayerStop();
 
         // Send message
-        string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
+        string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_SESSION.ToString();
         string messageAction = WebSocketMessageTypeEnums.GameSessionServerActions.ON_STOP.ToString();
 
         // Broadcast the stop to all the players, so they can send their answers to be processed
@@ -98,6 +99,8 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
       // Notify the result
       // If all the players have sent the results, evaluate the answers and calculate the scores
       // After the score is calculated, send the scores to all the players
+      Console.WriteLine("----VEA LO QUE RECIBI:");
+      Console.WriteLine($"{userID} {jsonData}");
     }
   }
 }

@@ -51,11 +51,15 @@ namespace WordRush.Core.Features.Realtime.Models.GameSession
         if (currentState == SessionState.WaitingPlayersToJoin)
         {
           activeRound = new(roundLetters[0]);
+
+          ChangeState(SessionState.InRound);
         }
         else if (currentState == SessionState.InRoundResults)
         {
           rounds.Add(activeRound);
           activeRound = new(roundLetters[rounds.Count]);
+
+          ChangeState(SessionState.InRound);
         }
       }
     }

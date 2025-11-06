@@ -210,7 +210,7 @@ namespace WordRush.Core.Features.Realtime
       if (!initializedMessageHandlers)
       {
         _ = messageHandlers.TryAdd(WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString(), new GameRoomWebSocketMessageHandler());
-        _ = messageHandlers.TryAdd(WebSocketMessageTypeEnums.Categories.GAME.ToString(), new GameSessionWebSocketMessageHandler());
+        _ = messageHandlers.TryAdd(WebSocketMessageTypeEnums.Categories.GAME_SESSION.ToString(), new GameSessionWebSocketMessageHandler());
 
         initializedMessageHandlers = true;
       }
@@ -232,6 +232,10 @@ namespace WordRush.Core.Features.Realtime
           if (messageHandlers.TryGetValue(type, out WebSocketMessageHandler messageHandler))
           {
             await messageHandler.HandleSocketMessage(this, socket, userId, action, webSocketMessage.JsonData);
+          }
+          else
+          {
+            Log.Error($"Undefined handler for the category {type} | {action}");
           }
         }
         else

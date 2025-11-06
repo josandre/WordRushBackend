@@ -136,19 +136,22 @@ public class GameRoom
     lock (_lock)
     {
       Session.OnPlayerReadyForNextRound(userID);
+      Console.WriteLine($"Players ready for round: {Session.GetNumberOfPlayersReadyForNextRound()}, Total players: {Players.Count}");
       if (Session.GetNumberOfPlayersReadyForNextRound() >= Players.Count)
       {
         SessionState sessionState = Session.GetSessionState();
+        Console.WriteLine("--- Session state: " + sessionState.ToString());
         if (sessionState is SessionState.WaitingPlayersToJoin or SessionState.InRoundResults)
         {
+          Console.WriteLine("--- Starting new round");
           Session.StartNewRound();
         }
 
         return true;
       }
-    }
 
-    return false;
+      return false;
+    }
   }
 
   public SessionState GetSessionState()

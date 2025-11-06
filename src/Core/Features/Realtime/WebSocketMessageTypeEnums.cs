@@ -8,7 +8,7 @@ namespace WordRush.Core.Features.Realtime
     public enum Categories
     {
       GAME_ROOM,
-      GAME
+      GAME_SESSION
     }
 
     /// <summary>

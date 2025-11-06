@@ -80,11 +80,21 @@ public class GameRoom
   {
     lock (_lock)
     {
+      GameSettings currentSettings = Settings;
+
       ICollection<string> keys = Profiles.Keys.Any()
         ? Profiles.Keys
         : ReadyStatus.Keys;
 
-      RoomDataRequestedEvent roomData = new();
+      RoomDataRequestedEvent roomData = new()
+      {
+        Settings = new GameSettings
+        {
+          TimeLimit = currentSettings.TimeLimit,
+          Order = currentSettings.Order,
+          Letters = currentSettings.Letters != null ? currentSettings.Letters.ToArray() : Array.Empty<string>()
+        }
+      };
 
       IEnumerator<string> userIDs = Profiles.Keys.GetEnumerator();
       while (userIDs.MoveNext())
@@ -173,7 +183,12 @@ public class GameRoom
 
     lock (_lock)
     {
-      Settings = settings;
+      Settings = new GameSettings
+      {
+        TimeLimit = settings.TimeLimit,
+        Order = settings.Order,
+        Letters = settings.Letters != null ? settings.Letters.ToArray() : Array.Empty<string>()
+      };
     }
   }
 }

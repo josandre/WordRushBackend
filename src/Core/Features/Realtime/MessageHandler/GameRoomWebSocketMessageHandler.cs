@@ -2,6 +2,7 @@ using System.Linq;
 using System.Net.WebSockets;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 using WordRush.Core.Features.Game.CategoryTypes;
 using WordRush.Core.Features.Realtime.Models;
 using WordRush.Core.Features.Realtime.Models.CreateRoom;
@@ -87,13 +88,36 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
       string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
       string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.CREATED.ToString();
 
-      WebSocketMessage message = new(messageCategory, messageAction, JsonSerializer.Serialize(roomCreatedEventData));
-      await webSocketService.SendAsync(socket, JsonSerializer.Serialize(message));
+      WebSocketMessage message = new(messageCategory, messageAction, JsonSerializer.Serialize(roomCreatedEventData, webSocketService.JsonOptions));
+      await webSocketService.SendAsync(socket, JsonSerializer.Serialize(message, webSocketService.JsonOptions));
     }
 
     private async Task JoinRoom(WordRushWebSocketService webSocketService, WebSocket socket, string userID, string jsonData)
     {
-      JoinGameRoomEvent joinGameRoomEvent = JsonSerializer.Deserialize<JoinGameRoomEvent>(jsonData);
+      JoinGameRoomEvent? joinGameRoomEvent = null;
+      try
+      {
+        joinGameRoomEvent = JsonSerializer.Deserialize<JoinGameRoomEvent>(jsonData);
+      }
+      catch (Exception ex)
+      {
+        Log.Warning(ex, "[GAME ROOM] Failed to deserialize JoinGameRoomEvent. JSON Data: {JsonData}", jsonData);
+
+        string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
+        string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.JOINED_NON_EXISTING_ROOM.ToString();
+        WebSocketMessage message = new(messageCategory, messageAction, "{}");
+        await webSocketService.SendAsync(socket, JsonSerializer.Serialize(message, webSocketService.JsonOptions));
+        return;
+      }
+
+      if (joinGameRoomEvent == null || string.IsNullOrWhiteSpace(joinGameRoomEvent.RoomID))
+      {
+        string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
+        string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.JOINED_NON_EXISTING_ROOM.ToString();
+        WebSocketMessage message = new(messageCategory, messageAction, "{}");
+        await webSocketService.SendAsync(socket, JsonSerializer.Serialize(message, webSocketService.JsonOptions));
+        return;
+      }
 
       GameRoom? room = webSocketService.GetRoom(joinGameRoomEvent.RoomID);
       if (room != null)
@@ -105,14 +129,39 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
 
         await BroadcastRoomData(webSocketService, room);
 
-        GameRoomJoinedEvent roomJoinedEventData = new();
-        roomJoinedEventData.GameRoomID = room.RoomId;
+        CategoryType? categoryType;
+        using (var scope = webSocketService.ServiceScopeFactory.CreateScope())
+        {
+          var categoryTypesService = scope.ServiceProvider.GetRequiredService<ICategoryTypes>();
+          categoryType = await categoryTypesService.GetDefaultTypeWithColumns();
+
+          if (categoryType != null && categoryType.CategoryColumns.Any())
+          {
+            categoryType = new CategoryType
+            {
+              Id = categoryType.Id,
+              Name = categoryType.Name,
+              CategoryColumns = categoryType.CategoryColumns.Select(col => new CategoryColumn
+              {
+                Id = col.Id,
+                Column = col.Column
+              }).ToList()
+            };
+          }
+        }
+
+        GameRoomJoinedEvent roomJoinedEventData = new()
+        {
+          GameRoomID = room.RoomId,
+          Settings = room.Settings,
+          CategoryType = categoryType
+        };
 
         string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
         string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.JOINED.ToString();
 
-        WebSocketMessage message = new(messageCategory, messageAction, JsonSerializer.Serialize(roomJoinedEventData));
-        await webSocketService.SendAsync(socket, JsonSerializer.Serialize(message));
+        WebSocketMessage message = new(messageCategory, messageAction, JsonSerializer.Serialize(roomJoinedEventData, webSocketService.JsonOptions));
+        await webSocketService.SendAsync(socket, JsonSerializer.Serialize(message, webSocketService.JsonOptions));
       }
       else
       {
@@ -176,8 +225,8 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
       string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
       string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.DATA_UPDATED.ToString();
 
-      WebSocketMessage message = new(messageCategory, messageAction, JsonSerializer.Serialize(roomData));
-      await webSocketService.BroadcastToRoomAsync(room.RoomId, JsonSerializer.Serialize(message));
+      WebSocketMessage message = new(messageCategory, messageAction, JsonSerializer.Serialize(roomData, webSocketService.JsonOptions));
+      await webSocketService.BroadcastToRoomAsync(room.RoomId, JsonSerializer.Serialize(message, webSocketService.JsonOptions));
     }
   }
 }

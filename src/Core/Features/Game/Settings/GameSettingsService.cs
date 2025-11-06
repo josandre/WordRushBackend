@@ -1,3 +1,7 @@
+using Serilog;
+using WordRush.Core.Features.Realtime;
+using WordRush.Core.Features.Realtime.MessageHandler;
+
 namespace WordRush.Core.Features.Game;
 
 public class GameSettingsService : IGameSettingsService
@@ -9,7 +13,7 @@ public class GameSettingsService : IGameSettingsService
     _webSocketService = webSocketService;
   }
 
-  public GameRoom? UpdateGameSettings(string roomId, GameSettings settings)
+  public async Task<GameRoom?> UpdateGameSettings(string roomId, GameSettings settings)
   {
     if (string.IsNullOrWhiteSpace(roomId) || settings == null)
     {
@@ -20,6 +24,12 @@ public class GameSettingsService : IGameSettingsService
     if (room != null)
     {
       room.UpdateSettings(settings);
+      
+      if (_webSocketService is WordRushWebSocketService webSocketService)
+      {
+        await GameRoomWebSocketMessageHandler.BroadcastRoomData(webSocketService, room);
+      }
+      
       return room;
     }
 

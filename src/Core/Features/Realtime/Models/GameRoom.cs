@@ -42,12 +42,16 @@ public class GameRoom
   public RoomDataRequestedEvent GetRoomData()
   {
     lock (_lock)
-    {
-      ICollection<string> keys = Players.Keys.Any()
-        ? Players.Keys
-        : PlayersReadyStatus.Keys;
-
-      RoomDataRequestedEvent roomData = new();
+    {    
+      RoomDataRequestedEvent roomData = new()
+      {
+        Settings = new GameSettings
+        {
+          TimeLimit = currentSettings.TimeLimit,
+          Order = currentSettings.Order,
+          Letters = currentSettings.Letters != null ? currentSettings.Letters.ToArray() : Array.Empty<string>()
+        }
+      };
 
       IEnumerator<string> userIDs = Players.Keys.GetEnumerator();
       while (userIDs.MoveNext())
@@ -158,9 +162,10 @@ public class GameRoom
   {
     lock (_lock)
     {
-      return Session.GetSessionState();
+            return Session.GetSessionState();
     }
   }
+}
 
   internal void OnPlayerStop()
   {

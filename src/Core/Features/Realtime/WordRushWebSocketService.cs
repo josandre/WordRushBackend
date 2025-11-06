@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using LaunchDarkly.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using WordRush.Core.Features.Realtime.MessageHandler;
 
@@ -17,8 +18,21 @@ namespace WordRush.Core.Features.Realtime
 
     private readonly JsonSerializerOptions options = new()
     {
-      UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Skip
+      UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Skip,
+      ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles,
+      Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
+    
+    public JsonSerializerOptions JsonOptions => options;
+
+    private readonly IServiceScopeFactory _serviceScopeFactory;
+
+    public IServiceScopeFactory ServiceScopeFactory => _serviceScopeFactory;
+
+    public WordRushWebSocketService(IServiceScopeFactory serviceScopeFactory)
+    {
+      _serviceScopeFactory = serviceScopeFactory;
+    }
 
     public ConcurrentDictionary<string, GameRoom> Rooms { get; } = new();
 
@@ -182,7 +196,7 @@ namespace WordRush.Core.Features.Realtime
         string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.CLOSED.ToString();
 
         WebSocketMessage message = new(messageCategory, messageAction, "{}");
-        await BroadcastToRoomAsync(room.RoomId, JsonSerializer.Serialize(message));
+        await BroadcastToRoomAsync(room.RoomId, JsonSerializer.Serialize(message, options));
 
         // Destroy the room
         _ = Rooms.TryRemove(room.RoomId, out _);

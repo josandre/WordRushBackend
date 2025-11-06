@@ -4,6 +4,8 @@ namespace WordRush.Core.Features.Realtime.Models
   public class RoomDataRequestedEvent
   {
     public List<RoomDataPlayer> Players { get; set; } = new();
+    
+    public GameSettings Settings { get; set; } = new();
   }
 
   [Serializable]

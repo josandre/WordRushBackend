@@ -1,4 +1,6 @@
-namespace WordRush.Core.Features.StopGame
+using WordRush.Core.Features.Scoring.Models;
+
+namespace WordRush.Core.Features.Scoring
 {
   /// <summary>
   /// Defines the contract for scoring services used in WordRush.

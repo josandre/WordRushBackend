@@ -11,7 +11,6 @@ using WordRush.Core.Features.Game.CategoryColumns;
 using WordRush.Core.Features.Game.CategoryTypes;
 using WordRush.Core.Features.Realtime;
 using WordRush.Core.Features.Scoring;
-using WordRush.Core.Features.StopGame;
 using WordRush.Core.Infrastructure.Identity;
 using WordRush.Repository;
 using WordRush.Repository.Models;

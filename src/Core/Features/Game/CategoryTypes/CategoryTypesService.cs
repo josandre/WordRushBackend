@@ -13,9 +13,18 @@ public class CategoryTypesService : ICategoryTypes
     _dbContext = dbContext;
   }
 
-  public async Task<CategoryType> GetDefaultType()
+  public async Task<CategoryType?> GetDefaultType()
   {
     var defaultType = await _dbContext.CategoryTypes
+      .FirstOrDefaultAsync(type => type.Name == "Default");
+
+    return defaultType;
+  }
+
+  public async Task<CategoryType?> GetDefaultTypeWithColumns()
+  {
+    var defaultType = await _dbContext.CategoryTypes
+      .Include(ct => ct.CategoryColumns)
       .FirstOrDefaultAsync(type => type.Name == "Default");
 
     return defaultType;

@@ -20,7 +20,7 @@ public class GameController : ApiControllerBase
   }
 
   [HttpPut("update-settings")]
-  public ActionResult<UpdateGameSettingsResponse> UpdateGameSettings([FromBody] UpdateGameSettingsRequest request)
+  public async Task<ActionResult<UpdateGameSettingsResponse>> UpdateGameSettings([FromBody] UpdateGameSettingsRequest request)
   {
     if (!ModelState.IsValid)
     {
@@ -37,7 +37,7 @@ public class GameController : ApiControllerBase
       return BadRequest("Letters array cannot contain more than 5 elements");
     }
 
-    GameRoom? updatedRoom = _gameSettingsService.UpdateGameSettings(request.RoomId, request.Settings);
+    GameRoom? updatedRoom = await _gameSettingsService.UpdateGameSettings(request.RoomId, request.Settings);
 
     if (updatedRoom == null)
     {

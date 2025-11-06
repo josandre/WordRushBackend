@@ -27,7 +27,7 @@ namespace WordRush.Core.Features.StopGame
     public string Name { get; set; } = string.Empty;
     public Dictionary<string, string> Answers { get; set; } = new();
     public Dictionary<string, CategoryScore> Scores { get; set; } = new();
-    public int Total { get; set; }  // ✅ Added: total score per player
+    public int Total { get; set; }
   }
 
   public class CategoryScore

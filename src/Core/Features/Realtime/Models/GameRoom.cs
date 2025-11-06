@@ -42,14 +42,16 @@ public class GameRoom
   public RoomDataRequestedEvent GetRoomData()
   {
     lock (_lock)
-    {    
+    {
+      GameSettings currentSettings = Settings;
+
       RoomDataRequestedEvent roomData = new()
       {
         Settings = new GameSettings
         {
           TimeLimit = currentSettings.TimeLimit,
           Order = currentSettings.Order,
-          Letters = currentSettings.Letters != null ? currentSettings.Letters.ToArray() : Array.Empty<string>()
+          Letters = currentSettings.Letters != null ? currentSettings.Letters : Array.Empty<string>()
         }
       };
 
@@ -162,12 +164,11 @@ public class GameRoom
   {
     lock (_lock)
     {
-            return Session.GetSessionState();
+      return Session.GetSessionState();
     }
   }
-}
 
-  internal void OnPlayerStop()
+  public void OnPlayerStop()
   {
     lock (_lock)
     {

@@ -9,5 +9,13 @@ namespace WordRush.Core.Features.Realtime.Models.GameSession
     public string Answer { get; set; } = string.Empty; // The text used as the answer for the category
 
     public GameAnswerResult Result { get; set; } = new(); // Reference to the result of this answer
+
+    public GameAnswer(string category, string answer)
+    {
+      Category = category;
+      Answer = answer;
+
+      Result = new();
+    }
   }
 }

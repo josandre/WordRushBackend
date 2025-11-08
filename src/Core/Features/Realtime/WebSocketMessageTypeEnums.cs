@@ -49,7 +49,8 @@ namespace WordRush.Core.Features.Realtime
       ROUND_STARTED,
       ON_STOP,
       ROUND_FINISHED,
-      ROUND_RESULTS_SENT
+      ROUND_RESULTS_SENT,
+      GAME_FINISHED
     }
   }
 }

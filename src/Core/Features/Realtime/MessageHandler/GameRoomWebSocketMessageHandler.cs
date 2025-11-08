@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Net.WebSockets;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,7 +5,6 @@ using Serilog;
 using WordRush.Core.Features.Game.CategoryTypes;
 using WordRush.Core.Features.Realtime.Models;
 using WordRush.Core.Features.Realtime.Models.CreateRoom;
-using WordRush.Core.Features.Realtime.Models.GameSession;
 using WordRush.Core.Features.Realtime.Models.JoinRoom;
 using WordRush.Repository.Models;
 
@@ -87,6 +85,15 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
         Settings = room.Settings,
         CategoryType = categoryType
       };
+
+      // Cache categories in memory as well
+      List<CategoryColumn> dbCategories = categoryType.CategoryColumns as List<CategoryColumn>;
+      List<string> settingsCategories = new();
+      for (int i = 0; i < dbCategories.Count; i++)
+      {
+        settingsCategories.Add(dbCategories[i].Column);
+      }
+      room.Settings.CategoriesArray = settingsCategories.ToArray();
 
       string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
       string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.CREATED.ToString();

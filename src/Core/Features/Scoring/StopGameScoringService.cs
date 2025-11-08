@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
@@ -6,12 +7,73 @@ using WordRush.Core.Features.Scoring.Models;
 
 namespace WordRush.Core.Features.Scoring
 {
-  public class StopGameScoringService(IHttpClientFactory httpClientFactory, IConfiguration config) : IScoringService
+  public class StopGameScoringService : IScoringService
   {
-    private readonly HttpClient _httpClient = httpClientFactory.CreateClient();
-    private readonly string ollamaModel = config["Ollama:Model"] ?? "llama3.1";
-    private readonly string ollamaBaseUrl = config["Ollama:BaseUrl"] ?? "http://localhost:11434/api/generate";
+    private readonly HttpClient _httpClient;
+    private readonly string ollamaModel;
+    private readonly string ollamaBaseUrl;
+    private readonly JsonSerializerOptions jsonOpts = new()
+    {
+      PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+      WriteIndented = false
+    };
+    private readonly object modelOptions;
+    private readonly TimeSpan ollamaRequestTimeout;
 
+    public StopGameScoringService(IHttpClientFactory httpClientFactory, IConfiguration config)
+    {
+      _httpClient = httpClientFactory.CreateClient();
+      _httpClient.Timeout = Timeout.InfiniteTimeSpan; // disable automatic cancellation
+
+      ollamaModel = config["Ollama:Model"] ?? "llama3";
+      ollamaBaseUrl = config["Ollama:BaseUrl"] ?? "http://localhost:11434/api/generate";
+
+      int timeoutSeconds = int.TryParse(config["Ollama:RequestTimeoutSeconds"], out int t) ? t : 300;
+      ollamaRequestTimeout = TimeSpan.FromSeconds(timeoutSeconds);
+
+      modelOptions = new
+      {
+        temperature = double.TryParse(config["Ollama:Options:temperature"], out double temp) ? temp : 0.15,
+        num_predict = int.TryParse(config["Ollama:Options:num_predict"], out int np) ? np : 2048
+      };
+    }
+
+    //Warm-up function called from Program.cs
+    public async Task WarmUpModelAsync()
+    {
+      try
+      {
+        var warmupPrompt = new
+        {
+          model = ollamaModel,
+          prompt = "Return JSON { \"status\": \"ready\" }",
+          stream = false,
+          options = modelOptions
+        };
+
+        using StringContent content = new(
+            JsonSerializer.Serialize(warmupPrompt, jsonOpts),
+            Encoding.UTF8,
+            "application/json");
+
+        Log.Information("Sending Ollama warm-up request to {Url}...", ollamaBaseUrl);
+        using HttpResponseMessage response = await _httpClient.PostAsync(ollamaBaseUrl, content);
+        string result = await response.Content.ReadAsStringAsync();
+
+        if (response.IsSuccessStatusCode)
+        {
+          Log.Information("Ollama warm-up succeeded. Response: {Snippet}", result[..Math.Min(result.Length, 100)]);
+        }
+        else
+        {
+          Log.Warning("Ollama warm-up failed. Status: {Status} | Message: {Message}", response.StatusCode, result);
+        }
+      }
+      catch (Exception ex)
+      {
+        Log.Warning(ex, "Warm-up skipped — Ollama may not be reachable.");
+      }
+    }
     // ----------------------------------------------------------
     // BACKEND VALIDATION RULES
     // ----------------------------------------------------------
@@ -211,51 +273,93 @@ namespace WordRush.Core.Features.Scoring
     // ----------------------------------------------------------
     // SEND PROMPT TO OLLAMA
     // ----------------------------------------------------------
-    public async Task<string> SendToModelAsync(string _prompt)
+    // Main call to Ollama with manual timeout and full logging
+    public async Task<string> SendToModelAsync(string prompt)
     {
+      Stopwatch timer = Stopwatch.StartNew();
+      int estimatedPromptTokens = EstimateTokenCount(prompt);
+
       try
       {
-        var body = new
+        var payload = new
         {
           model = ollamaModel,
-          prompt = _prompt,
+          prompt,
           stream = false,
-          options = new { temperature = 0.2, num_ctx = 4096 }
+          options = modelOptions
         };
 
-        StringContent content = new(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        HttpResponseMessage response = await _httpClient.PostAsync(ollamaBaseUrl, content);
+        using StringContent content = new(
+            JsonSerializer.Serialize(payload, jsonOpts),
+            Encoding.UTF8,
+            "application/json");
+
+        using CancellationTokenSource cts = new(ollamaRequestTimeout);
+
+        Log.Information("Sending prompt to Ollama model '{Model}' (timeout {Timeout}s)...",
+            ollamaModel, ollamaRequestTimeout.TotalSeconds);
+
+        using HttpResponseMessage response = await _httpClient.PostAsync(ollamaBaseUrl, content, cts.Token);
+        timer.Stop();
+
+        string responseText = await response.Content.ReadAsStringAsync();
+        int estimatedResponseTokens = EstimateTokenCount(responseText);
+
+        Log.Information(
+          "Ollama call finished in {Elapsed} ms | Prompt ≈ {PromptTokens} tokens | Response ≈ {ResponseTokens} tokens",
+          timer.ElapsedMilliseconds,
+          estimatedPromptTokens,
+          estimatedResponseTokens);
 
         if (!response.IsSuccessStatusCode)
         {
-          string err = await response.Content.ReadAsStringAsync();
-          Log.Error("Ollama API returned error: {Status} - {Message}", response.StatusCode, err);
+          Log.Error("Ollama API error {Status}: {Message}", response.StatusCode, responseText);
           return string.Empty;
         }
 
-        string json = await response.Content.ReadAsStringAsync();
-
-        using JsonDocument doc = JsonDocument.Parse(json);
+        using JsonDocument doc = JsonDocument.Parse(responseText);
         if (doc.RootElement.TryGetProperty("response", out JsonElement inner))
         {
-          string innerText = inner.GetString() ?? string.Empty;
-          int firstBrace = innerText.IndexOf('{');
+          string result = inner.GetString() ?? string.Empty;
+          int firstBrace = result.IndexOf('{');
           if (firstBrace >= 0)
           {
-            innerText = innerText[firstBrace..];
+            result = result[firstBrace..];
           }
 
-          return innerText.Trim();
+          if (timer.ElapsedMilliseconds > 10000)
+          {
+            Log.Warning("Ollama took unusually long ({Elapsed} ms) for this request.", timer.ElapsedMilliseconds);
+          }
+
+          Log.Information("Total ≈ {TotalTokens} tokens processed in {Elapsed} ms",
+              estimatedPromptTokens + estimatedResponseTokens,
+              timer.ElapsedMilliseconds);
+
+          return result.Trim();
         }
 
-        Log.Warning("Ollama response did not contain a 'response' field.");
+        Log.Warning("Ollama response missing 'response' field.");
+        return string.Empty;
+      }
+      catch (TaskCanceledException)
+      {
+        timer.Stop();
+        Log.Warning("Ollama call exceeded manual timeout ({Timeout}s) after {Elapsed} ms.",
+            ollamaRequestTimeout.TotalSeconds, timer.ElapsedMilliseconds);
         return string.Empty;
       }
       catch (Exception ex)
       {
-        Log.Error(ex, "Error calling Ollama API");
+        timer.Stop();
+        Log.Error(ex, "Error calling Ollama API after {Elapsed} ms", timer.ElapsedMilliseconds);
         return string.Empty;
       }
+    }
+
+    private static int EstimateTokenCount(string text)
+    {
+      return Math.Max(1, text.Length / 4);
     }
 
     // ----------------------------------------------------------
@@ -289,7 +393,21 @@ namespace WordRush.Core.Features.Scoring
                     "\"$1\""
                   );
 
-        // Step 3: Trim markdown markers or accidental text from LLM
+        // Step 3: Fix phi3 pseudo-JSON (single quotes instead of double quotes)
+        jsonOnly = System.Text.RegularExpressions.Regex.Replace(
+                    jsonOnly,
+                    @"'([^']*)'",
+                    "\"$1\""
+                  );
+
+        // Step 4: Remove trailing commas before closing braces/brackets
+        jsonOnly = System.Text.RegularExpressions.Regex.Replace(
+                    jsonOnly,
+                    @",(\s*[}\]])",
+                    "$1"
+                  );
+
+        // Step 5: Trim markdown markers or accidental text from LLM
         int jsonStart = jsonOnly.IndexOf('{');
         int jsonEnd = jsonOnly.LastIndexOf('}');
         if (jsonStart >= 0 && jsonEnd > jsonStart)
@@ -297,7 +415,26 @@ namespace WordRush.Core.Features.Scoring
           jsonOnly = jsonOnly.Substring(jsonStart, jsonEnd - jsonStart + 1);
         }
 
-        // Step 4: Attempt to deserialize
+        // Step 6: Clean invisible characters (BOM, etc.)
+        jsonOnly = jsonOnly.Replace("\uFEFF", string.Empty).Trim();
+
+        // Step 6b: Repair malformed model output (e.g., stray "0- points:" lines)
+        jsonOnly = System.Text.RegularExpressions.Regex.Replace(
+                    jsonOnly,
+                    @"\b0-\s*points\s*:\s*\d+,\s*reason\s*:\s*'[^']*'\s*,?",
+                    string.Empty,
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                  );
+
+        // Ensure missing braces are balanced (defensive fix)
+        int open = jsonOnly.Count(c => c == '{');
+        int close = jsonOnly.Count(c => c == '}');
+        if (close < open)
+        {
+          jsonOnly += new string('}', open - close);
+        }
+
+        // Step 7: Attempt to deserialize
         StopGameResponse? parsed = JsonSerializer.Deserialize<StopGameResponse>(
           jsonOnly,
           new JsonSerializerOptions
@@ -313,7 +450,7 @@ namespace WordRush.Core.Features.Scoring
           return null;
         }
 
-        // Step 5: Rebuild missing fields
+        // Step 8: Rebuild missing fields
         if (parsed.Categories == null || parsed.Categories.Count == 0)
         {
           parsed.Categories = [.. originalRequest.Categories];
@@ -327,7 +464,6 @@ namespace WordRush.Core.Features.Scoring
         foreach (PlayerResult player in parsed.Players)
         {
           player.Answers ??= [];
-
           player.Scores ??= [];
 
           foreach (string category in parsed.Categories)
@@ -359,6 +495,7 @@ namespace WordRush.Core.Features.Scoring
         return null;
       }
     }
+
 
   }
 }

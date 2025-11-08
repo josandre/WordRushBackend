@@ -5,7 +5,7 @@ using WordRush.Core.Features.Scoring.Models;
 
 namespace WordRush.Web.Controllers
 {
-  [Authorize]
+  //[Authorize]
   [Route("api/scoregame")]
   public class ScoreGameController : ApiControllerBase
   {

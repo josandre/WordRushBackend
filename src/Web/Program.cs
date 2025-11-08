@@ -164,6 +164,26 @@ builder.Host.UseSerilog();
 // ------------------------------------------------------------
 WebApplication app = builder.Build();
 
+// ✅ Start warm-up in background after 5 s (GPU ready)
+_ = Task.Run(async () =>
+{
+  await Task.Delay(10000);
+  try
+  {
+    using var scope = app.Services.CreateScope();
+    var scoring = scope.ServiceProvider.GetRequiredService<IScoringService>() as StopGameScoringService;
+    if (scoring != null)
+    {
+      Log.Information("Starting delayed Ollama GPU warm-up...");
+      await scoring.WarmUpModelAsync();
+    }
+  }
+  catch (Exception ex)
+  {
+    Log.Warning(ex, "Ollama warm-up skipped — model server may not be ready.");
+  }
+});
+
 if (app.Environment.IsDevelopment())
 {
   app.UseSwagger();

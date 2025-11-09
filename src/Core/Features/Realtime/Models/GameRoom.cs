@@ -47,12 +47,7 @@ public class GameRoom
 
       RoomDataRequestedEvent roomData = new()
       {
-        Settings = new GameSettings
-        {
-          TimeLimit = currentSettings.TimeLimit,
-          Order = currentSettings.Order,
-          Letters = currentSettings.Letters != null ? currentSettings.Letters : Array.Empty<string>()
-        }
+        Settings = currentSettings
       };
 
       IEnumerator<string> userIDs = Players.Keys.GetEnumerator();
@@ -126,9 +121,7 @@ public class GameRoom
     lock (_lock)
     {
       Session = new();
-
-      // TODO: Actually get the letters and timer based on the game settings
-      Session.Setup(new string[] { "A", "B", "C" });
+      Session.Setup(Settings.LettersArray);
     }
   }
 
@@ -173,6 +166,29 @@ public class GameRoom
     lock (_lock)
     {
       Session.OnStop();
+    }
+  }
+
+  internal bool RegisterPlayerRoundResult(string userID, GameRoundResult result)
+  {
+    lock (_lock)
+    {
+      int numberOfResult = Session.RegisterUserRoundAnswers(userID, result);
+      if (numberOfResult >= Players.Count)
+      {
+        Session.ChangeState(SessionState.InRoundResults);
+        return true;
+      }
+
+      return false;
+    }
+  }
+
+  internal int GetRoundIndex()
+  {
+    lock (_lock)
+    {
+      return Session.GetRoundIndex();
     }
   }
 }

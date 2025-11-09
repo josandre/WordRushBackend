@@ -259,7 +259,7 @@ namespace WordRush.Core.Features.Realtime
       }
       catch (Exception e)
       {
-        Log.Warning("ERROR: Couldn't parse the JSON from the WebSocket message." + e.Message);
+        Log.Warning($"ERROR: Couldn't parse the JSON from the WebSocket message: {message}. Reason: " + e.Message);
       }
     }
 

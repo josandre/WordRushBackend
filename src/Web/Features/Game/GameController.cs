@@ -32,7 +32,7 @@ public class GameController : ApiControllerBase
       return BadRequest("RoomId is required");
     }
 
-    if (request.Settings.Letters.Length > 5)
+    if (request.Settings.LettersArray.Length > 5)
     {
       return BadRequest("Letters array cannot contain more than 5 elements");
     }

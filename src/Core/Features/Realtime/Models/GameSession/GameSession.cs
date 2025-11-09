@@ -1,3 +1,4 @@
+
 namespace WordRush.Core.Features.Realtime.Models.GameSession
 {
   /// <summary>
@@ -57,9 +58,18 @@ namespace WordRush.Core.Features.Realtime.Models.GameSession
         else if (currentState == SessionState.InRoundResults)
         {
           rounds.Add(activeRound);
-          activeRound = new(roundLetters[rounds.Count]);
 
-          ChangeState(SessionState.InRound);
+          // No more rounds available to play, just finish the game
+          if (rounds.Count >= roundLetters.Length)
+          {
+            ChangeState(SessionState.InGameResults);
+          }
+          // Keep playing
+          else
+          {
+            activeRound = new(roundLetters[rounds.Count]);
+            ChangeState(SessionState.InRound);
+          }
         }
       }
     }
@@ -108,6 +118,22 @@ namespace WordRush.Core.Features.Realtime.Models.GameSession
       }
     }
 
+    public int GetActiveRoundNumberOfPlayerResults()
+    {
+      lock (_lock)
+      {
+        return activeRound.GetNumberOfResults();
+      }
+    }
+
+    public GameRound GetActiveRound()
+    {
+      lock (_lock)
+      {
+        return activeRound;
+      }
+    }
+
     internal SessionState GetSessionState()
     {
       lock (_lock)
@@ -118,8 +144,19 @@ namespace WordRush.Core.Features.Realtime.Models.GameSession
 
     internal void Setup(string[] letters)
     {
-      roundLetters = letters;
-      ChangeState(SessionState.WaitingPlayersToJoin);
+      lock (_lock)
+      {
+        roundLetters = letters;
+        ChangeState(SessionState.WaitingPlayersToJoin);
+      }
+    }
+
+    internal int GetRoundIndex()
+    {
+      lock (_lock)
+      {
+        return rounds.Count;
+      }
     }
   }
 

@@ -5,16 +5,11 @@ using WordRush.Core.Features.Scoring.Models;
 
 namespace WordRush.Web.Controllers
 {
-  //[Authorize]
+  [Authorize]
   [Route("api/scoregame")]
-  public class ScoreGameController : ApiControllerBase
+  public class ScoreGameController(IScoringService pScoringService) : ApiControllerBase
   {
-    private readonly IScoringService _scoringService;
-
-    public ScoreGameController(IScoringService scoringService)
-    {
-      _scoringService = scoringService;
-    }
+    private readonly IScoringService scoringService = pScoringService;
 
     /// <summary>
     /// Scores a round of the Stop game using the AI-based scoring service.
@@ -24,19 +19,19 @@ namespace WordRush.Web.Controllers
     [HttpPost("score")]
     public async Task<IActionResult> Score([FromBody] StopGameRequest request)
     {
+      if (!ModelState.IsValid)
+      {
+        return BadRequest(ModelState);
+      }
+
       if (request == null)
       {
         return BadRequest("Invalid request payload.");
       }
 
-      StopGameResponse? result = await _scoringService.ScoreGameAsync(request);
+      StopGameResponse? result = await scoringService.ScoreGameAsync(request);
 
-      if (result == null)
-      {
-        return StatusCode(500, "Scoring service returned no result.");
-      }
-
-      return Ok(result);
+      return result == null ? StatusCode(500, "Scoring service returned no result.") : (IActionResult)Ok(result);
     }
   }
 }

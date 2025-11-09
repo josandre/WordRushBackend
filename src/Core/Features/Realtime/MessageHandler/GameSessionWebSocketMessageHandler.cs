@@ -69,14 +69,22 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
         }
         else if (sessionState == SessionState.InGameResults)
         {
-          // Send message
           string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_SESSION.ToString();
           string messageAction = WebSocketMessageTypeEnums.GameSessionServerActions.GAME_FINISHED.ToString();
 
           Console.WriteLine($"GAME FINISHED");
 
-          // Broadcast the new phase to all players in the room
-          WebSocketMessage message = new(messageCategory, messageAction, "{}");
+          // 🔹 Build final leaderboard
+          List<GamePlayerScore> finalScores = room.Session.GetAllScores();
+
+          var finalResponse = new
+          {
+            Players = finalScores
+          };
+
+          WebSocketMessage message = new(messageCategory, messageAction,
+              JsonSerializer.Serialize(finalResponse));
+
           await webSocketService.BroadcastToRoomAsync(room.RoomId, JsonSerializer.Serialize(message));
         }
       }
@@ -181,19 +189,30 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
             {
               Log.Information("[SCORING] Round {Letter} evaluated successfully for room {RoomId}", currentRound.Letter, room.RoomId);
 
+              // 🔹 Update cumulative totals for each player in the session
+              foreach (var scoredPlayer in scoredResponse.Players)
+              {
+                room.Session.AddOrUpdatePlayerScore(scoredPlayer.Name, scoredPlayer.Total);
+              }
+
+              // ✅ Optional: log current standings
+              foreach (var p in room.Session.Players.Values)
+              {
+                Log.Information("[STANDINGS] {Name}: {Score}", p.Nickname, p.TotalScore);
+              }
+
+              // Then broadcast round results...
               string scoreMessageCategory = WebSocketMessageTypeEnums.Categories.GAME_SESSION.ToString();
               string scoreMessageAction = WebSocketMessageTypeEnums.GameSessionServerActions.ROUND_RESULTS_SENT.ToString();
 
-              WebSocketMessage scoredMessage = new WebSocketMessage(
+              WebSocketMessage scoredMessage = new(
                   scoreMessageCategory,
                   scoreMessageAction,
-                  JsonSerializer.Serialize(scoredResponse, webSocketService.JsonOptions)
-              );
+                  JsonSerializer.Serialize(scoredResponse, webSocketService.JsonOptions));
 
               await webSocketService.BroadcastToRoomAsync(
                   room.RoomId,
-                  JsonSerializer.Serialize(scoredMessage, webSocketService.JsonOptions)
-              );
+                  JsonSerializer.Serialize(scoredMessage, webSocketService.JsonOptions));
             }
             else
             {
@@ -207,28 +226,16 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
             string scoreMessageCategory = WebSocketMessageTypeEnums.Categories.GAME_SESSION.ToString();
             string scoreMessageAction = WebSocketMessageTypeEnums.GameSessionServerActions.ROUND_RESULTS_SENT.ToString();
 
-            WebSocketMessage errorMessage = new WebSocketMessage(
+            WebSocketMessage errorMessage = new(
                 scoreMessageCategory,
                 scoreMessageAction,
-                JsonSerializer.Serialize(new { error = "Scoring service failed to evaluate round." })
-            );
+                JsonSerializer.Serialize(new { error = "Scoring service failed to evaluate round." }));
 
             await webSocketService.BroadcastToRoomAsync(
                 room.RoomId,
-                JsonSerializer.Serialize(errorMessage, webSocketService.JsonOptions)
-            );
+                JsonSerializer.Serialize(errorMessage, webSocketService.JsonOptions));
           }
         }
-
-        //Console.WriteLine("Evaluation finished, returning results");
-
-        //// Send round results message
-        //string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_SESSION.ToString();
-        //string messageAction = WebSocketMessageTypeEnums.GameSessionServerActions.ROUND_RESULTS_SENT.ToString();
-
-        //// Broadcast the new phase to all players in the room
-        //WebSocketMessage message = new(messageCategory, messageAction, JsonSerializer.Serialize(room.Session.GetActiveRound()));
-        //await webSocketService.BroadcastToRoomAsync(room.RoomId, JsonSerializer.Serialize(message));
       }
     }
   }

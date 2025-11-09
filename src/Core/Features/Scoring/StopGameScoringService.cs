@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 using Serilog;
 using WordRush.Core.Features.Scoring.Models;
@@ -174,6 +175,22 @@ namespace WordRush.Core.Features.Scoring
 
         foreach (PlayerResult player in parsed.Players)
         {
+          // 🧹 Normalize player name: remove spaces, trim, and standardize casing
+          if (!string.IsNullOrWhiteSpace(player.Name))
+          {
+            player.Name = Regex.Replace(player.Name, @"\s+", string.Empty).Trim();
+
+            // Optional: capitalize first letter and lower the rest
+            if (player.Name.Length > 1)
+            {
+              player.Name = char.ToUpper(player.Name[0]) + player.Name[1..].ToLower();
+            }
+            else
+            {
+              player.Name = player.Name.ToUpper();
+            }
+          }
+
           player.Answers ??= [];
           player.Scores ??= [];
 

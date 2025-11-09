@@ -1,6 +1,9 @@
 using System.Net.WebSockets;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 using WordRush.Core.Features.Realtime.Models.GameSession;
+using WordRush.Core.Features.Scoring;
 
 namespace WordRush.Core.Features.Realtime.MessageHandler
 {
@@ -149,16 +152,83 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
 
         // The data is ready to start the evaluation
         // TODO: FRANCISCO Wait here until the system finishes with the evaluation, for now simply notify that the round has finished
+        // The data is ready to start the evaluation
+        using (var scope = webSocketService.ServiceScopeFactory.CreateScope())
+        {
+          var scoringService = scope.ServiceProvider.GetRequiredService<IScoringService>();
 
-        Console.WriteLine("Evaluation finished, returning results");
+          try
+          {
+            // Build scoring request
+            GameRound currentRound = room.Session.GetActiveRound();
+            var request = new WordRush.Core.Features.Scoring.Models.StopGameRequest
+            {
+              Letter = currentRound.Letter,
+              Categories = room.Settings.CategoriesArray.ToList(),
+              Players = currentRound.Results.Select(r => new WordRush.Core.Features.Scoring.Models.PlayerEntry
+              {
+                Name = r.User.Nickname,
+                Answers = r.Answers.ToDictionary(a => a.Category, a => a.Answer)
+              }).ToList()
+            };
 
-        // Send round results message
-        string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_SESSION.ToString();
-        string messageAction = WebSocketMessageTypeEnums.GameSessionServerActions.ROUND_RESULTS_SENT.ToString();
+            Log.Information("[SCORING] Starting AI evaluation for round {Letter} in room {RoomId}", currentRound.Letter, room.RoomId);
 
-        // Broadcast the new phase to all players in the room
-        WebSocketMessage message = new(messageCategory, messageAction, JsonSerializer.Serialize(room.Session.GetActiveRound()));
-        await webSocketService.BroadcastToRoomAsync(room.RoomId, JsonSerializer.Serialize(message));
+            // Evaluate via Ollama AI model
+            WordRush.Core.Features.Scoring.Models.StopGameResponse? scoredResponse = await scoringService.ScoreGameAsync(request);
+
+            if (scoredResponse != null)
+            {
+              Log.Information("[SCORING] Round {Letter} evaluated successfully for room {RoomId}", currentRound.Letter, room.RoomId);
+
+              string scoreMessageCategory = WebSocketMessageTypeEnums.Categories.GAME_SESSION.ToString();
+              string scoreMessageAction = WebSocketMessageTypeEnums.GameSessionServerActions.ROUND_RESULTS_SENT.ToString();
+
+              WebSocketMessage scoredMessage = new WebSocketMessage(
+                  scoreMessageCategory,
+                  scoreMessageAction,
+                  JsonSerializer.Serialize(scoredResponse, webSocketService.JsonOptions)
+              );
+
+              await webSocketService.BroadcastToRoomAsync(
+                  room.RoomId,
+                  JsonSerializer.Serialize(scoredMessage, webSocketService.JsonOptions)
+              );
+            }
+            else
+            {
+              Log.Warning("[SCORING] Null result returned for round {Letter} in room {RoomId}", currentRound.Letter, room.RoomId);
+            }
+          }
+          catch (Exception ex)
+          {
+            Log.Error(ex, "[SCORING] Error while evaluating round {Letter} in room {RoomId}", room.Session.GetActiveRound().Letter, room.RoomId);
+
+            string scoreMessageCategory = WebSocketMessageTypeEnums.Categories.GAME_SESSION.ToString();
+            string scoreMessageAction = WebSocketMessageTypeEnums.GameSessionServerActions.ROUND_RESULTS_SENT.ToString();
+
+            WebSocketMessage errorMessage = new WebSocketMessage(
+                scoreMessageCategory,
+                scoreMessageAction,
+                JsonSerializer.Serialize(new { error = "Scoring service failed to evaluate round." })
+            );
+
+            await webSocketService.BroadcastToRoomAsync(
+                room.RoomId,
+                JsonSerializer.Serialize(errorMessage, webSocketService.JsonOptions)
+            );
+          }
+        }
+
+        //Console.WriteLine("Evaluation finished, returning results");
+
+        //// Send round results message
+        //string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_SESSION.ToString();
+        //string messageAction = WebSocketMessageTypeEnums.GameSessionServerActions.ROUND_RESULTS_SENT.ToString();
+
+        //// Broadcast the new phase to all players in the room
+        //WebSocketMessage message = new(messageCategory, messageAction, JsonSerializer.Serialize(room.Session.GetActiveRound()));
+        //await webSocketService.BroadcastToRoomAsync(room.RoomId, JsonSerializer.Serialize(message));
       }
     }
   }

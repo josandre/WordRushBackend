@@ -21,7 +21,7 @@ namespace WordRush.Core.Features.Scoring
     /// </summary>
     /// <param name="prompt">The AI prompt to evaluate.</param>
     /// <returns>The raw JSON response returned by the model.</returns>
-    Task<string> SendToModelAsync(string prompt);
+    Task<string> SendToModelAsync(string prompt, StopGameRequest? context);
 
     /// <summary>
     /// Parses the AI response into a structured <see cref="StopGameResponse"/>.

@@ -1,4 +1,6 @@
 
+using System.Collections.Concurrent;
+
 namespace WordRush.Core.Features.Realtime.Models.GameSession
 {
   /// <summary>
@@ -8,6 +10,7 @@ namespace WordRush.Core.Features.Realtime.Models.GameSession
   [Serializable]
   public class GameSession
   {
+    public ConcurrentDictionary<string, GamePlayerScore> Players { get; } = new();
     // Flag to determine if the system is waiting for player confirmations for the next phase
     private bool waitingToStartNextRound = new();
 
@@ -26,6 +29,28 @@ namespace WordRush.Core.Features.Realtime.Models.GameSession
     private SessionState currentState = new();
 
     private readonly object _lock = new();
+
+    public void AddOrUpdatePlayerScore(string name, int roundScore)
+    {
+      string normalized = name.Trim().ToLowerInvariant();
+
+      _ = Players.AddOrUpdate(normalized,
+        new GamePlayerScore
+        {
+          Nickname = name,
+          TotalScore = roundScore
+        },
+        (key, existing) =>
+        {
+          existing.TotalScore += roundScore;
+          return existing;
+        });
+    }
+
+    public List<GamePlayerScore> GetAllScores()
+    {
+      return Players.Values.OrderByDescending(p => p.TotalScore).ToList();
+    }
 
     public void OnStop()
     {
@@ -159,7 +184,11 @@ namespace WordRush.Core.Features.Realtime.Models.GameSession
       }
     }
   }
-
+  public class GamePlayerScore
+  {
+    public string Nickname { get; set; } = string.Empty;
+    public int TotalScore { get; set; } = 0;
+  }
   /// <summary>
   /// Defines the current state of the game session.
   /// </summary>

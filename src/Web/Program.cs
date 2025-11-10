@@ -25,10 +25,10 @@ services.AddHealthChecks();
 services.AddControllers()
     .AddJsonOptions(options =>
     {
-        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
-        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+      _ = options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+      options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+      _ = options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+      _ = options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
     });
 services.AddEndpointsApiExplorer();
 
@@ -100,7 +100,7 @@ services.AddCors(options =>
 {
   options.AddPolicy(myAllowSpecificOrigins, policy =>
   {
-    policy.AllowAnyOrigin()
+    _ = policy.AllowAnyOrigin()
           .AllowAnyHeader()
           .AllowAnyMethod();
   });
@@ -111,7 +111,7 @@ services.AddCors(options =>
 // ------------------------------------------------------------
 if (builder.Environment.IsDevelopment())
 {
-  builder.Configuration.AddUserSecrets<Program>(optional: true, reloadOnChange: true);
+  _ = builder.Configuration.AddUserSecrets<Program>(optional: true, reloadOnChange: true);
 }
 
 string? connection = builder.Configuration.GetConnectionString("WordRushDb");
@@ -164,10 +164,29 @@ builder.Host.UseSerilog();
 // ------------------------------------------------------------
 WebApplication app = builder.Build();
 
+// Start warm-up in background after 5 s (GPU ready)
+_ = Task.Run(async () =>
+{
+  await Task.Delay(10000);
+  try
+  {
+    using IServiceScope scope = app.Services.CreateScope();
+    if (scope.ServiceProvider.GetRequiredService<IScoringService>() is StopGameScoringService scoring)
+    {
+      Log.Information("Starting delayed Ollama GPU warm-up...");
+      await scoring.WarmUpModelAsync();
+    }
+  }
+  catch (Exception ex)
+  {
+    Log.Warning(ex, "Ollama warm-up skipped — model server may not be ready.");
+  }
+});
+
 if (app.Environment.IsDevelopment())
 {
-  app.UseSwagger();
-  app.UseSwaggerUI();
+  _ = app.UseSwagger();
+  _ = app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
@@ -185,7 +204,6 @@ app.UseWebSockets(new WebSocketOptions
 {
   KeepAliveInterval = TimeSpan.FromSeconds(120)
 });
-
 
 // ------------------------------------------------------------
 // Run Application

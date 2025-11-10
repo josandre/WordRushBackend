@@ -78,12 +78,26 @@ namespace WordRush.Core.Features.Scoring
         Log.Warning(ex, "Warm-up skipped — Ollama may not be reachable.");
       }
     }
+    // Normalize multilingual field names (Spanish → English)
+    private static string NormalizeJsonKeys(string json)
+    {
+      // Replace only property names, not values
+      json = Regex.Replace(json, @"\bCategor[ií]as\b", "categories", RegexOptions.IgnoreCase);
+      json = Regex.Replace(json, @"\bJugadores\b", "players", RegexOptions.IgnoreCase);
+      json = Regex.Replace(json, @"\bNombre\b", "name", RegexOptions.IgnoreCase);
+      json = Regex.Replace(json, @"\bRespuestas\b", "answers", RegexOptions.IgnoreCase);
+      json = Regex.Replace(json, @"\bPuntajes\b", "scores", RegexOptions.IgnoreCase);
+      json = Regex.Replace(json, @"\bpuntos\b", "points", RegexOptions.IgnoreCase);
+      json = Regex.Replace(json, @"\braz[oó]n\b", "reason", RegexOptions.IgnoreCase);
+      return json;
+    }
 
     // ----------------------------------------------------------
     // PARSE OLLAMA RESPONSE
     // ----------------------------------------------------------
     public StopGameResponse? ParseResponse(string responseText, StopGameRequest originalRequest)
     {
+
       try
       {
         if (string.IsNullOrWhiteSpace(responseText))
@@ -134,6 +148,9 @@ namespace WordRush.Core.Features.Scoring
         {
           jsonOnly += new string('}', open - close);
         }
+
+        // Step 4.5: Normalize multilingual JSON keys
+        jsonOnly = NormalizeJsonKeys(jsonOnly);
 
         // Step 5: Deserialize safely
         StopGameResponse? parsed = JsonSerializer.Deserialize<StopGameResponse>(
@@ -226,10 +243,11 @@ namespace WordRush.Core.Features.Scoring
     public async Task<StopGameResponse?> ScoreGameAsync(StopGameRequest request)
     {
       ValidateBasicRules(request);
+
       // --- Pre-filter nonsense and repeated answers before AI call ---
       foreach (var player in request.Players)
       {
-        var answers = player.Answers.Values
+        List<string> answers = player.Answers.Values
             .Select(a => a?.Trim().ToLowerInvariant() ?? string.Empty)
             .ToList();
 
@@ -260,7 +278,7 @@ namespace WordRush.Core.Features.Scoring
       }
 
       string prompt = BuildPrompt(request);
-      string modelOutput = await SendToModelAsync(prompt);
+      string modelOutput = await SendToModelAsync(prompt, request);
 
       Log.Information("Ollama raw output : \n{Output}", modelOutput);
 
@@ -315,30 +333,8 @@ namespace WordRush.Core.Features.Scoring
       _ = sb.AppendLine("You are an expert lexical and semantic judge for the word game 'STOP!'.");
       _ = sb.AppendLine("Your task is to evaluate each player's answers for validity, semantics, and correctness according to the given categories and the provided starting letter.");
       _ = sb.AppendLine("You must return ONLY valid, well-structured JSON with the following exact format:");
+      _ = sb.AppendLine("You must always respond in English, using only ASCII property names exactly as in the example (categories, players, answers, scores, points, reason).");
       _ = sb.AppendLine("{\"letter\":\"C\",\"categories\":[\"Name\",\"Country or City\",\"Animal\",\"Fruit or Food\",\"Color\"],\"players\":[{\"name\":\"Alice\",\"answers\":{\"Name\":\"Carlos\",\"Country or City\":\"Chile\",\"Animal\":\"Caballo\",\"Fruit or Food\":\"Chocolate\",\"Color\":\"Celeste\"},\"scores\":{\"Name\":{\"points\":10,\"reason\":\"Valid word for category\"},\"Country or City\":{\"points\":10,\"reason\":\"Valid country or city\"},\"Animal\":{\"points\":10,\"reason\":\"Valid animal\"},\"Fruit or Food\":{\"points\":10,\"reason\":\"Valid fruit or food\"},\"Color\":{\"points\":10,\"reason\":\"Valid color\"}}},{\"name\":\"Bob\",\"answers\":{\"Name\":\"Carmen\",\"Country or City\":\"Canada\",\"Animal\":\"Camaleón\",\"Fruit or Food\":\"Cereal\",\"Color\":\"Café\"},\"scores\":{\"Name\":{\"points\":10,\"reason\":\"Valid word for category\"},\"Country or City\":{\"points\":10,\"reason\":\"Valid country or city\"},\"Animal\":{\"points\":10,\"reason\":\"Valid animal\"},\"Fruit or Food\":{\"points\":10,\"reason\":\"Valid fruit or food\"},\"Color\":{\"points\":10,\"reason\":\"Valid color\"}}}]}\r\n");
-      //_ = sb.AppendLine("{");
-      //_ = sb.AppendLine("  \"letter\": \"A\",");
-      //_ = sb.AppendLine("  \"categories\": [\"Name\", \"Country or City\", \"Animal\", \"Fruit or Food\", \"Color\"],");
-      //_ = sb.AppendLine("  \"players\": [");
-      //_ = sb.AppendLine("    {");
-      //_ = sb.AppendLine("      \"name\": \"PlayerName\",");
-      //_ = sb.AppendLine("      \"answers\": {");
-      //_ = sb.AppendLine("        \"Name\": \"word\",");
-      //_ = sb.AppendLine("        \"Country or City\": \"word\",");
-      //_ = sb.AppendLine("        \"Animal\": \"word\",");
-      //_ = sb.AppendLine("        \"Fruit or Food\": \"word\",");
-      //_ = sb.AppendLine("        \"Color\": \"word\"");
-      //_ = sb.AppendLine("      },");
-      //_ = sb.AppendLine("      \"scores\": {");
-      //_ = sb.AppendLine("        \"Name\": { \"points\": 10, \"reason\": \"Valid word for category\" },");
-      //_ = sb.AppendLine("        \"Country or City\": { \"points\": 10, \"reason\": \"Valid country or city\" },");
-      //_ = sb.AppendLine("        \"Animal\": { \"points\": 10, \"reason\": \"Valid animal\" },");
-      //_ = sb.AppendLine("        \"Fruit or Food\": { \"points\": 10, \"reason\": \"Valid fruit or food\" },");
-      //_ = sb.AppendLine("        \"Color\": { \"points\": 10, \"reason\": \"Valid color\" }");
-      //_ = sb.AppendLine("      }");
-      //_ = sb.AppendLine("    }");
-      //_ = sb.AppendLine("  ]");
-      //_ = sb.AppendLine("}");
 
       // ===== SCORING INSTRUCTIONS =====
       _ = sb.AppendLine("1. The letter defines the starting character that every valid word must begin with.");
@@ -438,93 +434,151 @@ namespace WordRush.Core.Features.Scoring
     }
 
     // ----------------------------------------------------------
-    // SEND PROMPT TO OLLAMA
+    // SEND PROMPT TO OLLAMA (with adaptive prediction + retry)
     // ----------------------------------------------------------
-    // Main call to Ollama with manual timeout and full logging
-    public async Task<string> SendToModelAsync(string prompt)
+    public async Task<string> SendToModelAsync(string prompt, StopGameRequest? context = null)
     {
       Stopwatch timer = Stopwatch.StartNew();
       int estimatedPromptTokens = EstimateTokenCount(prompt);
 
-      try
+      // Compute dynamic prediction limit if context available
+      int numPredict = context != null ? EstimateNumPredict(context) : (int?)modelOptions?.GetType().GetProperty("num_predict")?.GetValue(modelOptions) ?? 2048;
+      int attempt = 0;
+      const int MaxAttempts = 3;
+
+      while (attempt < MaxAttempts)
       {
-        var payload = new
+        attempt++;
+        try
         {
-          model = ollamaModel,
-          prompt,
-          stream = false,
-          options = modelOptions
-        };
-
-        using StringContent content = new(
-            JsonSerializer.Serialize(payload, jsonOpts),
-            Encoding.UTF8,
-            "application/json");
-
-        using CancellationTokenSource cts = new(ollamaRequestTimeout);
-
-        Log.Information(
-          "Sending prompt to Ollama model '{Model}' (timeout {Timeout}s)...", ollamaModel, ollamaRequestTimeout.TotalSeconds);
-
-        using HttpResponseMessage response = await httpClient.PostAsync(ollamaBaseUrl, content, cts.Token);
-        timer.Stop();
-
-        string responseText = await response.Content.ReadAsStringAsync();
-        int estimatedResponseTokens = EstimateTokenCount(responseText);
-
-        Log.Information(
-          "Ollama call finished in {Elapsed} ms | Prompt ≈ {PromptTokens} tokens | Response ≈ {ResponseTokens} tokens",
-          timer.ElapsedMilliseconds,
-          estimatedPromptTokens,
-          estimatedResponseTokens);
-
-        if (!response.IsSuccessStatusCode)
-        {
-          Log.Error("Ollama API error {Status}: {Message}", response.StatusCode, responseText);
-          return string.Empty;
-        }
-
-        using JsonDocument doc = JsonDocument.Parse(responseText);
-        if (doc.RootElement.TryGetProperty("response", out JsonElement inner))
-        {
-          string result = inner.GetString() ?? string.Empty;
-          int firstBrace = result.IndexOf('{');
-          if (firstBrace >= 0)
+          var payload = new
           {
-            result = result[firstBrace..];
-          }
+            model = ollamaModel,
+            prompt,
+            stream = false,
+            format = "json",
+            options = new
+            {
+              ((dynamic)modelOptions).temperature,
+              num_predict = numPredict
+            }
+          };
 
-          if (timer.ElapsedMilliseconds > 20000)
-          {
-            Log.Warning("Ollama took unusually long ({Elapsed} ms) for this request.", timer.ElapsedMilliseconds);
-          }
+          using StringContent content = new(
+              JsonSerializer.Serialize(payload, jsonOpts),
+              Encoding.UTF8,
+              "application/json");
+
+          using CancellationTokenSource cts = new(ollamaRequestTimeout);
 
           Log.Information(
-            "Total ≈ {TotalTokens} tokens processed in {Elapsed} ms", estimatedPromptTokens + estimatedResponseTokens, timer.ElapsedMilliseconds);
+              "Ollama request attempt {Attempt} | Model '{Model}' | num_predict={NumPredict} | Timeout={Timeout}s",
+              attempt, ollamaModel, numPredict, ollamaRequestTimeout.TotalSeconds);
 
-          return result.Trim();
+          using HttpResponseMessage response = await httpClient.PostAsync(ollamaBaseUrl, content, cts.Token);
+          string responseText = await response.Content.ReadAsStringAsync();
+          timer.Stop();
+
+          int estimatedResponseTokens = EstimateTokenCount(responseText);
+
+          Log.Information(
+              "Ollama call finished in {Elapsed} ms | Prompt ≈ {PromptTokens} tokens | Response ≈ {ResponseTokens} tokens",
+              timer.ElapsedMilliseconds,
+              estimatedPromptTokens,
+              estimatedResponseTokens);
+
+          if (!response.IsSuccessStatusCode)
+          {
+            Log.Error("Ollama API error {Status}: {Message}", response.StatusCode, responseText);
+            return string.Empty;
+          }
+
+          // Validate JSON integrity
+          if (IsValidJson(responseText))
+          {
+            Log.Information("Ollama response validated successfully on attempt {Attempt}.", attempt);
+            return ExtractInnerResponse(responseText);
+          }
+
+          Log.Warning("Ollama returned invalid or truncated JSON on attempt {Attempt}. Retrying...", attempt);
+          numPredict = Math.Min((int)(numPredict * 1.25), 4096);
         }
+        catch (TaskCanceledException ex)
+        {
+          timer.Stop();
+          Log.Warning(ex, "Ollama call exceeded manual timeout ({Timeout}s) after {Elapsed} ms.",
+              ollamaRequestTimeout.TotalSeconds, timer.ElapsedMilliseconds);
+        }
+        catch (JsonException jex)
+        {
+          timer.Stop();
+          Log.Warning(jex, "Malformed JSON detected from Ollama on attempt {Attempt}. Retrying with higher num_predict...", attempt);
+          numPredict = Math.Min((int)(numPredict * 1.25), 4096);
+        }
+        catch (Exception ex)
+        {
+          timer.Stop();
+          Log.Error(ex, "Unexpected error while calling Ollama (attempt {Attempt})", attempt);
+        }
+      }
 
-        Log.Warning("Ollama response missing 'response' field.");
-        return string.Empty;
-      }
-      catch (TaskCanceledException ex)
-      {
-        timer.Stop();
-        Log.Warning(ex, "Ollama call exceeded manual timeout ({Timeout}s) after {Elapsed} ms.", ollamaRequestTimeout.TotalSeconds, timer.ElapsedMilliseconds);
-        return string.Empty;
-      }
-      catch (Exception ex)
-      {
-        timer.Stop();
-        Log.Error(ex, "Error calling Ollama API after {Elapsed} ms", timer.ElapsedMilliseconds);
-        return string.Empty;
-      }
+      Log.Error("Ollama failed to return valid structured output after {Attempts} attempts.", MaxAttempts);
+      return string.Empty;
     }
 
     private static int EstimateTokenCount(string text)
     {
       return Math.Max(1, text.Length / 4);
+    }
+    private static bool IsValidJson(string input)
+    {
+      if (string.IsNullOrWhiteSpace(input))
+        return false;
+
+      input = input.Trim();
+      if (!(input.StartsWith("{") && input.EndsWith("}")) &&
+          !(input.StartsWith("[") && input.EndsWith("]")))
+        return false;
+
+      try
+      {
+        using JsonDocument doc = JsonDocument.Parse(input);
+        return doc.RootElement.ValueKind is JsonValueKind.Object or JsonValueKind.Array;
+      }
+      catch
+      {
+        return false;
+      }
+    }
+
+    private static string ExtractInnerResponse(string responseText)
+    {
+      try
+      {
+        using JsonDocument doc = JsonDocument.Parse(responseText);
+        if (doc.RootElement.TryGetProperty("response", out JsonElement inner))
+        {
+          string result = inner.GetString() ?? string.Empty;
+          int firstBrace = result.IndexOf('{');
+          return firstBrace >= 0 ? result[firstBrace..].Trim() : result.Trim();
+        }
+      }
+      catch
+      {
+        // If already valid JSON, return as-is
+        return responseText.Trim();
+      }
+
+      return responseText.Trim();
+    }
+
+    private static string RepairTruncatedJson(string raw)
+    {
+      int firstBrace = raw.IndexOf('{');
+      int lastBrace = raw.LastIndexOf('}');
+      if (firstBrace >= 0 && lastBrace > firstBrace)
+        return raw.Substring(firstBrace, lastBrace - firstBrace + 1);
+      return raw;
     }
 
     private static int EstimateNumPredict(StopGameRequest request)

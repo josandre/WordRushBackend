@@ -78,6 +78,7 @@ namespace WordRush.Core.Features.Scoring
         Log.Warning(ex, "Warm-up skipped — Ollama may not be reachable.");
       }
     }
+
     // Normalize multilingual field names (Spanish → English)
     private static string NormalizeJsonKeys(string json)
     {
@@ -334,7 +335,36 @@ namespace WordRush.Core.Features.Scoring
       _ = sb.AppendLine("Your task is to evaluate each player's answers for validity, semantics, and correctness according to the given categories and the provided starting letter.");
       _ = sb.AppendLine("You must return ONLY valid, well-structured JSON with the following exact format:");
       _ = sb.AppendLine("You must always respond in English, using only ASCII property names exactly as in the example (categories, players, answers, scores, points, reason).");
-      _ = sb.AppendLine("{\"letter\":\"C\",\"categories\":[\"Name\",\"Country or City\",\"Animal\",\"Fruit or Food\",\"Color\"],\"players\":[{\"name\":\"Alice\",\"answers\":{\"Name\":\"Carlos\",\"Country or City\":\"Chile\",\"Animal\":\"Caballo\",\"Fruit or Food\":\"Chocolate\",\"Color\":\"Celeste\"},\"scores\":{\"Name\":{\"points\":10,\"reason\":\"Valid word for category\"},\"Country or City\":{\"points\":10,\"reason\":\"Valid country or city\"},\"Animal\":{\"points\":10,\"reason\":\"Valid animal\"},\"Fruit or Food\":{\"points\":10,\"reason\":\"Valid fruit or food\"},\"Color\":{\"points\":10,\"reason\":\"Valid color\"}}},{\"name\":\"Bob\",\"answers\":{\"Name\":\"Carmen\",\"Country or City\":\"Canada\",\"Animal\":\"Camaleón\",\"Fruit or Food\":\"Cereal\",\"Color\":\"Café\"},\"scores\":{\"Name\":{\"points\":10,\"reason\":\"Valid word for category\"},\"Country or City\":{\"points\":10,\"reason\":\"Valid country or city\"},\"Animal\":{\"points\":10,\"reason\":\"Valid animal\"},\"Fruit or Food\":{\"points\":10,\"reason\":\"Valid fruit or food\"},\"Color\":{\"points\":10,\"reason\":\"Valid color\"}}}]}\r\n");
+      _ = sb.AppendLine("Please respond strictly in this JSON format:");
+      _ = sb.AppendLine("{");
+      _ = sb.AppendLine("  \"letter\": \"C\",");
+      _ = sb.AppendLine("  \"categories\": [\"Name\", \"Country or City\", \"Animal\", \"Fruit or Food\", \"Color\"],");
+      _ = sb.AppendLine("  \"players\": [");
+      _ = sb.AppendLine("    {");
+      _ = sb.AppendLine("      \"name\": \"Alice\",");
+      _ = sb.AppendLine("      \"answers\": {");
+      _ = sb.AppendLine("        \"Name\": \"Carlos\",");
+      _ = sb.AppendLine("        \"Country or City\": \"Chile\",");
+      _ = sb.AppendLine("        \"Animal\": \"Caballo\",");
+      _ = sb.AppendLine("        \"Fruit or Food\": \"Chocolate\",");
+      _ = sb.AppendLine("        \"Color\": \"Celeste\"");
+      _ = sb.AppendLine("      },");
+      _ = sb.AppendLine("      \"scores\": {");
+      _ = sb.AppendLine("        \"Name\": { \"points\": 10, \"reason\": \"Valid word for category\" },");
+      _ = sb.AppendLine("        \"Country or City\": { \"points\": 10, \"reason\": \"Valid country or city\" },");
+      _ = sb.AppendLine("        \"Animal\": { \"points\": 10, \"reason\": \"Valid animal\" },");
+      _ = sb.AppendLine("        \"Fruit or Food\": { \"points\": 10, \"reason\": \"Valid fruit or food\" },");
+      _ = sb.AppendLine("        \"Color\": { \"points\": 10, \"reason\": \"Valid color\" }");
+      _ = sb.AppendLine("      }");
+      _ = sb.AppendLine("    }");
+      _ = sb.AppendLine("  ]");
+      _ = sb.AppendLine("}");
+      _ = sb.AppendLine();
+      _ = sb.AppendLine("Important:");
+      _ = sb.AppendLine("- The 'answers' object must contain only plain text strings for each category.");
+      _ = sb.AppendLine("- The 'scores' object must contain JSON objects {\"points\": number, \"reason\": string} for each category.");
+      _ = sb.AppendLine("- Do not embed points or reasons inside 'answers'.");
+      _ = sb.AppendLine("- Keep field names and casing exactly as shown.");
 
       // ===== SCORING INSTRUCTIONS =====
       _ = sb.AppendLine("1. The letter defines the starting character that every valid word must begin with.");
@@ -530,6 +560,7 @@ namespace WordRush.Core.Features.Scoring
     {
       return Math.Max(1, text.Length / 4);
     }
+
     private static bool IsValidJson(string input)
     {
       if (string.IsNullOrWhiteSpace(input))

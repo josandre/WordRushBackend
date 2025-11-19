@@ -11,7 +11,6 @@ namespace WordRush.Core.Features.Scoring
 {
   public class StopGameScoringService : IScoringService
   {
-    private const string BASEURL = "http://localhost:11434/api/generate";
     private readonly HttpClient httpClient;
     private readonly string ollamaModel;
     private readonly string ollamaBaseUrl;
@@ -30,7 +29,7 @@ namespace WordRush.Core.Features.Scoring
       httpClient.Timeout = Timeout.InfiniteTimeSpan; // disable automatic cancellation
 
       ollamaModel = config["Ollama:Model"] ?? "llama3";
-      ollamaBaseUrl = config["Ollama:BaseUrl"] ?? BASEURL;
+      ollamaBaseUrl = config["Ollama:BaseUrl"] ?? "http://localhost:11434/api/generate";
 
       int timeoutSeconds = int.TryParse(config["Ollama:RequestTimeoutSeconds"], out int t) ? t : 300;
       ollamaRequestTimeout = TimeSpan.FromSeconds(timeoutSeconds);
@@ -38,7 +37,7 @@ namespace WordRush.Core.Features.Scoring
       modelOptions = new
       {
         temperature = double.TryParse(config["Ollama:Options:temperature"], out double temp) ? temp : 0.15,
-        num_predict = int.TryParse(config["Ollama:Options:num_predict"], out int np) ? np : 2048
+        num_predict = int.TryParse(config["Ollama:Options:num_predict"], out int np) ? np : 1024
       };
     }
 
@@ -330,137 +329,80 @@ namespace WordRush.Core.Features.Scoring
     // ----------------------------------------------------------
     public string BuildPrompt(StopGameRequest request)
     {
-      StringBuilder sb = new();
-      _ = sb.AppendLine("You are an expert lexical and semantic judge for the word game 'STOP!'.");
-      _ = sb.AppendLine("Your task is to evaluate each player's answers for validity, semantics, and correctness according to the given categories and the provided starting letter.");
-      _ = sb.AppendLine("You must return ONLY valid, well-structured JSON with the following exact format:");
-      _ = sb.AppendLine("You must always respond in English, using only ASCII property names exactly as in the example (categories, players, answers, scores, points, reason).");
-      _ = sb.AppendLine("Please respond strictly in this JSON format:");
-      _ = sb.AppendLine("{");
-      _ = sb.AppendLine("  \"letter\": \"C\",");
-      _ = sb.AppendLine("  \"categories\": [\"Name\", \"Country or City\", \"Animal\", \"Fruit or Food\", \"Color\"],");
-      _ = sb.AppendLine("  \"players\": [");
-      _ = sb.AppendLine("    {");
-      _ = sb.AppendLine("      \"name\": \"Alice\",");
-      _ = sb.AppendLine("      \"answers\": {");
-      _ = sb.AppendLine("        \"Name\": \"Carlos\",");
-      _ = sb.AppendLine("        \"Country or City\": \"Chile\",");
-      _ = sb.AppendLine("        \"Animal\": \"Caballo\",");
-      _ = sb.AppendLine("        \"Fruit or Food\": \"Chocolate\",");
-      _ = sb.AppendLine("        \"Color\": \"Celeste\"");
-      _ = sb.AppendLine("      },");
-      _ = sb.AppendLine("      \"scores\": {");
-      _ = sb.AppendLine("        \"Name\": { \"points\": 10, \"reason\": \"Valid word for category\" },");
-      _ = sb.AppendLine("        \"Country or City\": { \"points\": 10, \"reason\": \"Valid country or city\" },");
-      _ = sb.AppendLine("        \"Animal\": { \"points\": 10, \"reason\": \"Valid animal\" },");
-      _ = sb.AppendLine("        \"Fruit or Food\": { \"points\": 10, \"reason\": \"Valid fruit or food\" },");
-      _ = sb.AppendLine("        \"Color\": { \"points\": 10, \"reason\": \"Valid color\" }");
-      _ = sb.AppendLine("      }");
-      _ = sb.AppendLine("    }");
-      _ = sb.AppendLine("  ]");
-      _ = sb.AppendLine("}");
-      _ = sb.AppendLine();
-      _ = sb.AppendLine("Important:");
-      _ = sb.AppendLine("- The 'answers' object must contain only plain text strings for each category.");
-      _ = sb.AppendLine("- The 'scores' object must contain JSON objects {\"points\": number, \"reason\": string} for each category.");
-      _ = sb.AppendLine("- Do not embed points or reasons inside 'answers'.");
-      _ = sb.AppendLine("- Keep field names and casing exactly as shown.");
+      StringBuilder builder = new();
 
-      // ===== SCORING INSTRUCTIONS =====
-      _ = sb.AppendLine("1. The letter defines the starting character that every valid word must begin with.");
-      _ = sb.AppendLine("1a. Ignore capitalization and accents when matching the first letter. For example, 'Árbol' is valid for letter 'A'.");
-      _ = sb.AppendLine("1b. When checking if a word starts with the given letter, ignore accents and case entirely. For example, 'Águila' counts as starting with 'A', and 'árbol' counts as 'A'.");
-      _ = sb.AppendLine("1c. Never penalize a word for accented first letters — treat 'Á', 'É', 'Í', 'Ó', 'Ú', 'Ü' as their plain equivalents.");
-      _ = sb.AppendLine("2. Evaluate each answer in its category and assign points with reasoning.");
-      _ = sb.AppendLine("3. Output must always be strictly valid JSON and use only ASCII quotes, no trailing commas.");
-      _ = sb.AppendLine("4. Do not omit any player, category, or score fields. Never invent new keys.");
-      _ = sb.AppendLine("5. Give one of three point values per answer:");
-      _ = sb.AppendLine("   - 10 = Valid and fits category meaning.");
-      _ = sb.AppendLine("   - 5  = Valid but duplicated by another player in the same category.");
-      _ = sb.AppendLine("   - 0  = Invalid, nonsense, or does not fit the category meaning.");
+      _ = builder.AppendLine("You are a strict JSON scoring engine for the word game STOP.");
+      _ = builder.AppendLine("You receive a list of players, categories, and their answers.");
+      _ = builder.AppendLine("Your task is to assign scores to each answer according to the rules, include the original answers, and include the categories list in the output.");
+      _ = builder.AppendLine();
 
-      // ===== VALIDATION LOGIC =====
-      _ = sb.AppendLine("1. A valid answer must be a real or commonly recognized word beginning with the given letter.");
-      _ = sb.AppendLine("2. Reject nonsense, random characters, or strings with no lexical meaning.");
-      _ = sb.AppendLine("3. If a player leaves an answer blank, assign 0 with reason 'Missing answer'.");
-      _ = sb.AppendLine("4. Reject words that don't conceptually fit the category (e.g., 'Banana' for Animal).");
-      _ = sb.AppendLine("5. Accept plural and singular forms equally ('cats' == 'cat').");
-      _ = sb.AppendLine("6. Be culturally aware of Spanish and English words — both languages are allowed.");
-      _ = sb.AppendLine("7. Treat singular and plural forms as equivalent for duplication (e.g. 'Aguila' and 'Águila' are the same).");
-      _ = sb.AppendLine("8. Foods like 'Arroz', 'Pasta', 'Pan', 'Leche', 'Huevos', etc. are valid even if they are ingredients, not dishes.");
-      _ = sb.AppendLine("9. When comparing answers for duplicates, only mark them as duplicates if they are exactly the same normalized word (ignore case and accents).");
+      // Scoring rules
+      _ = builder.AppendLine("Rules:");
+      _ = builder.AppendLine("1. IMPORTANT! Only words that start with the given letter are valid. Ignore capitalization and accents when comparing the first letter.");
+      _ = builder.AppendLine("2. IMPORTANT! The word must match the category meaning exactly (e.g. an animal must be a real species name, a country must be a real country or city).");
+      _ = builder.AppendLine("3. IMPORTANT! The word MUST be a real word in any widely spoken language (English, Spanish, Italian, German, Portuguese, etc.) that matches the category meaning. Single letters, random strings, abbreviations or nonsense words are always invalid.");
+      _ = builder.AppendLine("4. Valid answers always score 10 points. Invalid, missing, or wrong‑letter answers always score 0 points. Do not assign duplicate penalties here (the backend will handle duplicates).");
+      _ = builder.AppendLine("5. The top-level JSON object must include 'letter', 'categories', and 'players'.");
+      _ = builder.AppendLine();
 
-      // ===== ACCENT & DIACRITIC NORMALIZATION =====
-      _ = sb.AppendLine("Treat accented letters (á, é, í, ó, ú, ü, ñ, ç) as their unaccented equivalents for validation and comparison.");
-      _ = sb.AppendLine("Example: 'Canadá' = 'Canada', 'Camaleón' = 'Camaleon', 'Brócoli' = 'Brocoli', 'Bogotá' = 'Bogota'.");
-      _ = sb.AppendLine("Never mark a valid Spanish or accented word as invalid solely because of its accent or case.");
-      _ = sb.AppendLine("Always accept equivalent Spanish and English forms of the same country or city (e.g., 'Canadá' = 'Canada', 'Atenas' = 'Athens').");
-      _ = sb.AppendLine("If two forms differ only by accent or language, treat them as the same word for validation and duplication purposes.");
-      _ = sb.AppendLine("Ensure that accented first letters are treated identically to their unaccented counterparts when validating the starting letter.");
+      // Clarifications for the Name category
+      _ = builder.AppendLine("IMPORTANT: The category \"Name\" refers ONLY to the player's answer, not the player's own name.");
+      _ = builder.AppendLine("IMPORTANT: The \"Name\" category must contain a real personal name or a widely recognized fictional or mythical name. Single letters, abbreviations, or nonsense strings are invalid.");
+      _ = builder.AppendLine("NEVER copy or compare the player's name field with the answer for the \"Name\" category.");
 
-      // ===== NAME CATEGORY RULES =====
-      _ = sb.AppendLine("1. Accept real given names from any culture (e.g., 'Ana', 'Carlos', 'Bo', 'Aby').");
-      _ = sb.AppendLine("2. Accept well-known fictional or mythological names (e.g., 'Cersei', 'Gandalf', 'Lara', 'Mario').");
-      _ = sb.AppendLine("3. Reject strings that are clearly nonsense or random (e.g., 'Aaaz', 'Bbb', 'Asd').");
-      _ = sb.AppendLine("4. Two-letter names are valid only if they correspond to known names (e.g., 'Ed', 'Bo', 'Al').");
-      _ = sb.AppendLine("5. Assign 0 points if the word does not plausibly represent a person's name.");
+      // Multi-word and adjective handling
+      _ = builder.AppendLine("IMPORTANT: For multi-word answers (e.g. \"Chocolate cake\", \"African lion\"), only the main noun counts.");
+      _ = builder.AppendLine(" – If the first word is an adjective (e.g. African, Brazilian, White), the answer is invalid; the noun itself must start with the given letter.");
+      _ = builder.AppendLine(" – Example: \"African lion\" is invalid for A (lion begins with L), \"Brazilian monkey\" is invalid for B (monkey begins with M), \"White rhinoceros\" is invalid for W (rhinoceros begins with R).");
+      _ = builder.AppendLine(" – Multi-word foods must start with the letter using their main word. \"Chocolate cake\" is valid for C because both words start with C. \"Chocolate mousse\" is NOT valid for M; only the first significant word is considered.");
+      _ = builder.AppendLine(" – Always strip accents and lower-case when checking the first letter.");
 
-      // ===== COUNTRY OR CITY CATEGORY =====
-      _ = sb.AppendLine("1. Accept any real country, city, state, or region name as valid. Do not require it to be a country only.");
-      _ = sb.AppendLine("2. Recognize both English and Spanish spellings (e.g., 'México', 'Mexico', 'Bogotá', 'Bogota').");
-      _ = sb.AppendLine("3. Reject fictional or non-geographic words.");
-      _ = sb.AppendLine("4. Always treat accented and unaccented versions of the same location as equivalent ('Canadá' = 'Canada', 'Atenas' = 'Athens').");
-      _ = sb.AppendLine("5. Accept any real city, state, or region as valid — do not reject just because it is not a country.");
-      _ = sb.AppendLine("   Examples: 'Cali', 'Paris', 'New York', 'Barcelona' are valid.");
-      _ = sb.AppendLine("6. Accept any real city or region, not only countries.");
+      // Output format
+      _ = builder.AppendLine();
+      _ = builder.AppendLine("### Output format:");
+      _ = builder.AppendLine("Respond only with valid JSON — no markdown, no commentary, no explanations.");
+      _ = builder.AppendLine("Each player must include both 'answers' and 'scores'.");
+      _ = builder.AppendLine();
+      _ = builder.AppendLine("{");
+      _ = builder.AppendLine("  \"letter\": \"S\",");
+      _ = builder.AppendLine("  \"categories\": [...],");
+      _ = builder.AppendLine("  \"players\": [");
+      _ = builder.AppendLine("    {");
+      _ = builder.AppendLine("      \"name\": string,");
+      _ = builder.AppendLine("      \"answers\": { \"<Category>\": \"<Answer>\", ... },");
+      _ = builder.AppendLine("      \"scores\": { \"<Category>\": { \"points\": number, \"reason\": string }, ... }");
+      _ = builder.AppendLine("    }");
+      _ = builder.AppendLine("  ]");
+      _ = builder.AppendLine("}");
 
+      // Input data
+      _ = builder.AppendLine();
+      _ = builder.AppendLine("### Input data:");
+      _ = builder.AppendLine($"Letter: {request.Letter}");
+      _ = builder.AppendLine($"Categories: {string.Join(", ", request.Categories)}");
+      _ = builder.AppendLine("Players and their answers:");
+      foreach (PlayerEntry player in request.Players)
+      {
+        _ = builder.AppendLine($"- {player.Name}: {JsonSerializer.Serialize(player.Answers)}");
+      }
 
-      // ===== ANIMAL CATEGORY =====
-      _ = sb.AppendLine("1. Accept any real animal species (singular form preferred).");
-      _ = sb.AppendLine("2. Ignore accents ('Camaleón' == 'Camaleon').");
-      _ = sb.AppendLine("3. Reject objects, foods, or mythological creatures unless clearly animal-like ('Dragon' may be accepted if treated as an animal).");
-      _ = sb.AppendLine("4. Do not reject common animals such as 'caballo', 'perro', 'gato', or 'vaca'. These are valid even if generic species names.");
+      _ = builder.AppendLine();
 
-      // ===== FRUIT OR FOOD CATEGORY =====
-      _ = sb.AppendLine("1. Accept edible foods, ingredients, or dishes ('Arroz', 'Chocolate Cake').");
-      _ = sb.AppendLine("2. Multi-word dishes are valid ('Ice Cream', 'Chocolate Cake').");
-      _ = sb.AppendLine("3. Reject non-edible items or non-food nouns.");
-      _ = sb.AppendLine("4. Accept foods in either Spanish or English (e.g., 'Arroz' = 'Rice', 'Pan' = 'Bread', 'Chocolate Cake' = 'Pastel de chocolate').");
-      _ = sb.AppendLine("5. Accept dishes or meals even if they are generic or multi-word (e.g., 'Carne asada', 'Fried chicken'). Only reject words that are clearly non-edible.");
-      _ = sb.AppendLine("6. Accept generic or prepared dishes even if not specific fruits (e.g., 'Carne asada', 'Pasta', 'Soup').");
-      _ = sb.AppendLine("5. Consider all edible foods, ingredients, fruits, or dishes as valid, even if generic or multi-word.");
-      _ = sb.AppendLine("   Examples: 'Carne asada', 'Chocolate cake', 'Chayote', 'Rice', 'Soup'.");
-      _ = sb.AppendLine("   Only reject non-edible items or words unrelated to food.");
-
-
-      // ===== COLOR CATEGORY =====
-      _ = sb.AppendLine("1. Accept any recognized color or shade ('Azul', 'Rojo', 'Beige', 'Café', 'Celeste').");
-      _ = sb.AppendLine("2. Reject words that are not color descriptors.");
-      _ = sb.AppendLine("3. Accept recognized color names in Spanish, English, or Portuguese (e.g., 'Azul', 'Amarillo', 'Rojo', 'Amarelo', 'Blue', 'Beige').");
-
-      // ===== DUPLICATE LOGIC =====
-      _ = sb.AppendLine("If two or more players submit the same valid word for a category, each should receive 5 points with reason 'Valid but duplicated by another player in the same category'.");
-      _ = sb.AppendLine("Duplicates must be checked after accent removal, case normalization, and trimming spaces. For example, 'Brócoli' and 'Brocoli' count as duplicates.");
-      _ = sb.AppendLine("Do not mark words as duplicates just because they belong to the same category or share the same starting letter.");
-      _ = sb.AppendLine("A word is a duplicate only if it is textually the same as another player's answer after normalization (case-insensitive, accent-insensitive, and trimmed).");
-      _ = sb.AppendLine("Only mark as duplicated if the normalized lowercase words are identical. Do not mark similar but different words as duplicates.");
-      _ = sb.AppendLine("For example: 'Azul' and 'Amarelo' are both valid colors but NOT duplicates.");
-
-      // ===== REASON FIELD SANITIZATION =====
-      _ = sb.AppendLine("Each 'reason' must be a short plain sentence using only letters, digits, spaces, and punctuation such as periods or commas.");
-      _ = sb.AppendLine("Do NOT include parentheses, quotation marks, or colons inside the reason text.");
-      _ = sb.AppendLine("Example: use 'Invalid country or city name' instead of 'Invalid country or city (should be Athens)'.");
-      _ = sb.AppendLine("All text values must be enclosed in standard double quotes. Never use single quotes or backticks.");
-      _ = sb.AppendLine("Each 'reason' should be clear and objective. Avoid speculative phrases like 'might be', 'perhaps', or question marks."); 
-
-      // ===== OUTPUT CONSTRAINT =====
-      _ = sb.AppendLine("Your final response must be strictly valid JSON — no markdown, no explanations, no prose, no comments, no extra keys. Only the structured JSON object exactly as defined.");
-      _ = sb.AppendLine("Ensure each 'answers' and 'scores' dictionary has one entry per category.");
-      _ = sb.AppendLine("Never include phrases like 'Here is the JSON:' or commentary before or after the object — output must start with '{' and end with '}'."); 
-      //_ = sb.AppendLine("Output compact JSON using all lowercase property names.");
-      _ = sb.AppendLine(JsonSerializer.Serialize(request, new JsonSerializerOptions { WriteIndented = true }));
-
-      return sb.ToString();
+      // Final validation phase
+      _ = builder.AppendLine("Return ONLY valid JSON following the exact structure above, including:");
+      _ = builder.AppendLine("1. 'letter' at the top");
+      _ = builder.AppendLine("2. 'categories' array with all categories");
+      _ = builder.AppendLine("3. 'players' array, where each player includes 'answers', 'scores'.");
+      _ = builder.AppendLine();
+      _ = builder.AppendLine("FINAL VALIDATION PHASE (MANDATORY):");
+      _ = builder.AppendLine("After constructing the entire JSON output, perform a full second-pass validation over every player's answers:");
+      _ = builder.AppendLine(" • Normalize each answer (lowercase, strip accents). For multi-word answers, remove leading adjectives; use the first significant noun.");
+      _ = builder.AppendLine($" • Check if the significant word starts with the required letter '{request.Letter}'. If it doesn’t, overwrite the score with {{ \"points\": 0, \"reason\": \"wrong-letter\" }}.");
+      _ = builder.AppendLine(" • Check if the answer is a real word in any widely used language and fits the category meaning. Reject nonsense strings, abbreviations, or adjectives used in place of nouns.");
+      _ = builder.AppendLine(" • If the answer is empty or missing, set {{ \"points\": 0, \"reason\": \"missing\" }}.");
+      _ = builder.AppendLine(" • If the answer passes all checks, set {{ \"points\": 10, \"reason\": \"valid\" }}.");
+      _ = builder.AppendLine("Overwrite the original points and reasons from the first pass. This validation is mandatory and must not be skipped.");
+      return builder.ToString();
     }
 
     // ----------------------------------------------------------
@@ -615,8 +557,8 @@ namespace WordRush.Core.Features.Scoring
     private static int EstimateNumPredict(StopGameRequest request)
     {
       const int BaseTokens = 600; // JSON overhead + prompt + structure
-      const int TokensPerCategory = 50; // per category *per player* heuristic
-      const double SafetyMargin = 1.3;  // add 30% buffer
+      const int TokensPerCategory = 60; // per category *per player* heuristic
+      const double SafetyMargin = 1.5;  // add 50% buffer
 
       int playerCount = request.Players?.Count ?? 0;
       int categoryCount = request.Categories?.Count ?? 0;
@@ -626,7 +568,7 @@ namespace WordRush.Core.Features.Scoring
       int adjusted = (int)(estimated * SafetyMargin);
 
       // Cap between reasonable limits to avoid overspending compute
-      return Math.Clamp(adjusted, 512, 4096);
+      return Math.Clamp(adjusted, 512, 6144);
     }
 
     // ----------------------------------------------------------

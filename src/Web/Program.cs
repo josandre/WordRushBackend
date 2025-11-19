@@ -152,6 +152,7 @@ builder.Services
     .AddScoped<IUserService, UserService>()
     .AddSingleton<IFeatureFlagService, FeatureFlagService>()
     .AddSingleton<IWordRushWebSocketService, WordRushWebSocketService>()
+    .AddScoped<IGameStatisticsService, GameStatisticsService>()
     .AddScoped<IScoringService, StopGameScoringService>()
     .AddScoped<IGameSettingsService, GameSettingsService>()
     .AddScoped<ICategoryColumns, CategoryColumnsService>()

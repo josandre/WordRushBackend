@@ -31,4 +31,6 @@ public class User : IdentityUser<int>
 
   [ForeignKey("RoleId")]
   public virtual Role Role { get; set; }
+
+  public virtual GameStatistics? GameStatistics { get; set; }
 }

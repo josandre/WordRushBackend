@@ -184,6 +184,56 @@ namespace WordRush.Core.Features.Scoring
                 : player.Name.ToUpper();
           }
 
+          // Match UserId from JSON response if available, otherwise match by name
+          PlayerEntry? matchingRequestPlayer = null;
+
+          // First try to match by UserId if both are available
+          if (player.UserId.HasValue)
+          {
+            matchingRequestPlayer = originalRequest.Players
+              .FirstOrDefault(p => p.UserId == player.UserId);
+
+            // Validate that the name also matches if UserId matched
+            if (matchingRequestPlayer != null &&
+                !string.Equals(matchingRequestPlayer.Name, player.Name, StringComparison.OrdinalIgnoreCase))
+            {
+              Log.Warning(
+                "UserId match found but name mismatch: JSON has '{JsonName}' (UserId: {JsonUserId}) but request has '{RequestName}' (UserId: {RequestUserId}). Using name match instead.",
+                player.Name, player.UserId, matchingRequestPlayer.Name, matchingRequestPlayer.UserId);
+              matchingRequestPlayer = null; // Reset to force name-based matching
+            }
+          }
+
+          // Fallback to name-based matching if UserId matching didn't work
+          if (matchingRequestPlayer == null)
+          {
+            matchingRequestPlayer = originalRequest.Players
+              .FirstOrDefault(p => string.Equals(p.Name, player.Name, StringComparison.OrdinalIgnoreCase));
+
+            // If we matched by name, validate/copy the UserId from request
+            if (matchingRequestPlayer != null)
+            {
+              if (player.UserId.HasValue && player.UserId != matchingRequestPlayer.UserId)
+              {
+                Log.Warning(
+                  "Name match found but UserId mismatch: JSON has UserId {JsonUserId} but request has UserId {RequestUserId} for player '{Name}'. Using request UserId.",
+                  player.UserId, matchingRequestPlayer.UserId, player.Name);
+              }
+              player.UserId = matchingRequestPlayer.UserId;
+            }
+            else
+            {
+              Log.Warning(
+                "Could not match player '{Name}' (UserId: {UserId}) from JSON response to any player in the request.",
+                player.Name, player.UserId);
+            }
+          }
+          else
+          {
+            // UserId matched successfully, ensure it's set
+            player.UserId = matchingRequestPlayer.UserId;
+          }
+
           player.Answers ??= new Dictionary<string, string>();
           player.Scores ??= new Dictionary<string, CategoryScore>();
 
@@ -200,7 +250,7 @@ namespace WordRush.Core.Features.Scoring
             }
 
             if (!player.Answers.ContainsKey(category) || string.IsNullOrWhiteSpace(player.Answers[category]))
-            {              
+            {
               string restored = originalRequest.Players
                   .FirstOrDefault(p =>
                       string.Equals(p.Name, player.Name, StringComparison.OrdinalIgnoreCase))?
@@ -278,10 +328,20 @@ namespace WordRush.Core.Features.Scoring
         }
       }
 
-      string prompt = BuildPrompt(request);
-      string modelOutput = await SendToModelAsync(prompt, request);
 
-      Log.Information("Ollama raw output : \n{Output}", modelOutput);
+      string prompt = BuildPrompt(request);
+      // works with ollama descomment when ollama can run and use it instead of the JSON
+      //string modelOutput = await SendToModelAsync(prompt, request);
+
+
+      // Read from JSON file instead of calling the model
+      string jsonFilePath = FindJsonFile();
+      string modelOutput = File.Exists(jsonFilePath)
+        ? await File.ReadAllTextAsync(jsonFilePath)
+        : throw new FileNotFoundException($"Could not find sample-response.json file. Tried: {jsonFilePath}");
+
+      Log.Information("Reading from JSON file: {FilePath}", jsonFilePath);
+      Log.Information("JSON file content : \n{Output}", modelOutput);
 
       StopGameResponse? parsed = ParseResponse(modelOutput, request);
 
@@ -301,6 +361,7 @@ namespace WordRush.Core.Features.Scoring
           PlayerResult result = new()
           {
             Name = player.Name,
+            UserId = player.UserId,
             Answers = player.Answers,
             Scores = []
           };
@@ -451,12 +512,12 @@ namespace WordRush.Core.Features.Scoring
       _ = sb.AppendLine("Do NOT include parentheses, quotation marks, or colons inside the reason text.");
       _ = sb.AppendLine("Example: use 'Invalid country or city name' instead of 'Invalid country or city (should be Athens)'.");
       _ = sb.AppendLine("All text values must be enclosed in standard double quotes. Never use single quotes or backticks.");
-      _ = sb.AppendLine("Each 'reason' should be clear and objective. Avoid speculative phrases like 'might be', 'perhaps', or question marks."); 
+      _ = sb.AppendLine("Each 'reason' should be clear and objective. Avoid speculative phrases like 'might be', 'perhaps', or question marks.");
 
       // ===== OUTPUT CONSTRAINT =====
       _ = sb.AppendLine("Your final response must be strictly valid JSON — no markdown, no explanations, no prose, no comments, no extra keys. Only the structured JSON object exactly as defined.");
       _ = sb.AppendLine("Ensure each 'answers' and 'scores' dictionary has one entry per category.");
-      _ = sb.AppendLine("Never include phrases like 'Here is the JSON:' or commentary before or after the object — output must start with '{' and end with '}'."); 
+      _ = sb.AppendLine("Never include phrases like 'Here is the JSON:' or commentary before or after the object — output must start with '{' and end with '}'.");
       //_ = sb.AppendLine("Output compact JSON using all lowercase property names.");
       _ = sb.AppendLine(JsonSerializer.Serialize(request, new JsonSerializerOptions { WriteIndented = true }));
 
@@ -744,6 +805,60 @@ namespace WordRush.Core.Features.Scoring
 
         player.Total = player.Scores.Values.Sum(s => s.Points);
       }
+    }
+
+    private static string FindJsonFile()
+    {
+      const string fileName = "sample-response.json";
+      string relativePath = Path.Combine("src", "Core", "Features", "Scoring", fileName);
+
+      // Try current directory
+      string currentDir = Directory.GetCurrentDirectory();
+      string jsonPath = Path.Combine(currentDir, relativePath);
+      if (File.Exists(jsonPath))
+      {
+        return jsonPath;
+      }
+
+      // Try from project root (look for WordRush.sln)
+      string? searchDir = currentDir;
+      while (searchDir != null)
+      {
+        string slnPath = Path.Combine(searchDir, "WordRush.sln");
+        if (File.Exists(slnPath))
+        {
+          jsonPath = Path.Combine(searchDir, relativePath);
+          if (File.Exists(jsonPath))
+          {
+            return jsonPath;
+          }
+          break;
+        }
+        searchDir = Directory.GetParent(searchDir)?.FullName;
+      }
+
+      // Try from assembly location
+      string? assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
+      if (!string.IsNullOrEmpty(assemblyLocation))
+      {
+        string? assemblyDir = Path.GetDirectoryName(assemblyLocation);
+        if (assemblyDir != null)
+        {
+          // Navigate up from bin/Debug/net9.0 to project root
+          for (int i = 0; i < 5 && assemblyDir != null; i++)
+          {
+            string testPath = Path.Combine(assemblyDir, relativePath);
+            if (File.Exists(testPath))
+            {
+              return testPath;
+            }
+            assemblyDir = Directory.GetParent(assemblyDir)?.FullName;
+          }
+        }
+      }
+
+      // Return the expected path even if it doesn't exist (for error message)
+      return Path.Combine(currentDir, relativePath);
     }
   }
 }

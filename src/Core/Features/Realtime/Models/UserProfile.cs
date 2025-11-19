@@ -3,6 +3,8 @@ namespace WordRush.Core.Features.Realtime.Models
   [Serializable]
   public class UserProfile
   {
+    public int? UserId { get; set; }
+
     public string Nickname { get; set; } = "Player";
 
     public string Avatar { get; set; } = string.Empty;

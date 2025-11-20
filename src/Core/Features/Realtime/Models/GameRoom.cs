@@ -22,6 +22,14 @@ public class GameRoom
 
   public GameSettings Settings { get; set; } = new();
 
+  /// <summary>
+  /// Tracks how many hint tokens each player has remaining.  
+  /// The key is the user ID and the value is the number of tokens left.
+  /// This dictionary is initialized when players join the room and whenever
+  /// game settings (including the starting token count) are updated.
+  /// </summary>
+  public ConcurrentDictionary<string, int> PlayerHintTokens { get; } = new();
+
   public List<WebSocket> PlayerSockets { get; } = new();
 
   private readonly object _lock = new();
@@ -29,6 +37,37 @@ public class GameRoom
   public GameRoom(string roomId)
   {
     RoomId = roomId;
+  }
+
+  /// <summary>
+  /// Returns the number of remaining hint tokens for the specified player.  
+  /// If the player does not have an entry yet, returns the configured default
+  /// from <see cref="Settings.HintTokens"/>.
+  /// </summary>
+  public int GetRemainingHints(string userId)
+  {
+    return PlayerHintTokens.TryGetValue(userId, out int tokens)
+        ? tokens
+        : Settings?.HintTokens ?? 0;
+  }
+
+  /// <summary>
+  /// Consumes a single hint token for the specified player if available.  
+  /// Returns <c>true</c> if a token was consumed, otherwise <c>false</c>.
+  /// </summary>
+  public bool UseHint(string userId)
+  {
+    lock (_lock)
+    {
+      int current = GetRemainingHints(userId);
+      if (current <= 0)
+      {
+        return false;
+      }
+
+      PlayerHintTokens[userId] = current - 1;
+      return true;
+    }
   }
 
   public void ToggleReadyStateForPlayer(string userId)
@@ -90,6 +129,14 @@ public class GameRoom
       {
         PlayerSockets.Add(socket);
       }
+
+      // Initialise hint tokens for this player if not already present
+      if (!PlayerHintTokens.ContainsKey(userID))
+      {
+        // Use the configured starting number of tokens from the current settings
+        int startingTokens = Settings?.HintTokens ?? 0;
+        _ = PlayerHintTokens.TryAdd(userID, startingTokens);
+      }
     }
   }
 
@@ -100,6 +147,9 @@ public class GameRoom
       _ = Players.TryRemove(userID, out _);
       _ = PlayersReadyStatus.TryRemove(userID, out _);
       _ = PlayerSockets.Remove(socket);
+
+      // Remove the player's hint token entry
+      _ = PlayerHintTokens.TryRemove(userID, out _);
     }
   }
 
@@ -113,6 +163,13 @@ public class GameRoom
     lock (_lock)
     {
       Settings = settings;
+
+      // Reset or update hint tokens for all players when settings change
+      // If the configured number of tokens has changed, update each player's remaining tokens
+      foreach (var userId in Players.Keys)
+      {
+        PlayerHintTokens[userId] = settings.HintTokens;
+      }
     }
   }
 

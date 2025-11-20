@@ -44,5 +44,12 @@ public class GameSettings
       }
     }
   }
+
+  /// <summary>
+  /// Number of hint tokens each player starts with in a game session.
+  /// A token allows a player to request a hint for a category/letter pair.
+  /// Defaults to 3 if not configured.
+  /// </summary>
+  public int HintTokens { get; set; } = 3;
 }
 

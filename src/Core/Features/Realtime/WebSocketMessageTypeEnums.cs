@@ -41,7 +41,8 @@ namespace WordRush.Core.Features.Realtime
     {
       READY_FOR_NEXT_ROUND,
       STOP,
-      SEND_ROUND_ANSWERS
+      SEND_ROUND_ANSWERS,
+      REQUEST_HINT
     }
 
     public enum GameSessionServerActions
@@ -50,7 +51,8 @@ namespace WordRush.Core.Features.Realtime
       ON_STOP,
       ROUND_FINISHED,
       ROUND_RESULTS_SENT,
-      GAME_FINISHED
+      GAME_FINISHED,
+      HINT_RESPONSE
     }
   }
 }

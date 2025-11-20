@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using WordRush.Core.Features.Realtime.Models.GameSession;
 using WordRush.Core.Features.Scoring;
+using WordRush.Core.Features.Realtime.Models;
+using WordRush.Core.Features.Hints;
 
 namespace WordRush.Core.Features.Realtime.MessageHandler
 {
@@ -28,6 +30,9 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
         case WebSocketMessageTypeEnums.GameSessionClientActions.SEND_ROUND_ANSWERS:
           await OnPlayerSentRoundAnswers(webSocketService, userID, jsonData);
           break;
+      case WebSocketMessageTypeEnums.GameSessionClientActions.REQUEST_HINT:
+        await OnPlayerRequestedHint(webSocketService, socket, userID, jsonData);
+        break;
       }
     }
 
@@ -297,5 +302,116 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
         }
       }
     }
+    /// <summary>
+    /// Handles a hint request from a client.  
+    /// Validates the player's remaining hint tokens, invokes the AI hint service
+    /// and sends the generated hint back only to the requesting socket.  
+    /// If no tokens remain, a message indicating that no hints are left is returned.
+    /// </summary>
+    public async Task OnPlayerRequestedHint(
+    WordRushWebSocketService webSocketService,
+    WebSocket socket,
+    string userID,
+    string jsonData)
+    {
+      // Determine which room the user belongs to
+      if (!webSocketService.UserToRoom.TryGetValue(userID, out string roomID))
+      {
+        Log.Warning("[HINT] User {UserID} is not assigned to any room.", userID);
+        return;
+      }
+
+      GameRoom? room = webSocketService.GetRoom(roomID);
+      if (room == null)
+      {
+        Log.Warning("[HINT] Room {RoomID} not found for user {UserID}.", roomID, userID);
+        return;
+      }
+
+      // Deserialize the incoming hint request (category + letter)
+      HintRequest? request = null;
+      try
+      {
+        request = JsonSerializer.Deserialize<HintRequest>(jsonData, webSocketService.JsonOptions);
+      }
+      catch (Exception ex)
+      {
+        Log.Warning(ex, "[HINT] Failed to deserialize hint request for user {UserID}. Raw: {JsonData}", userID, jsonData);
+      }
+
+      string category = request?.Category?.Trim() ?? string.Empty;
+      string letter = request?.Letter?.Trim() ?? string.Empty;
+
+      // If letter not provided, use the active round's letter
+      if (string.IsNullOrWhiteSpace(letter))
+      {
+        try
+        {
+          var activeRound = room.Session.GetActiveRound();
+          letter = activeRound?.Letter ?? letter;
+        }
+        catch (Exception ex)
+        {
+          Log.Warning(ex, "[HINT] Could not fetch active round letter for user {UserID}.", userID);
+        }
+      }
+
+      Log.Information("[HINT] Player {UserID} requested hint. Category='{Category}', Letter='{Letter}'", userID, category, letter);
+
+      // Check if the player has tokens remaining
+      if (!room.UseHint(userID))
+      {
+        Log.Information("[HINT] Player {UserID} has no tokens left.", userID);
+        var noTokensResponse = new
+        {
+          hint = "",
+          tokensLeft = room.GetRemainingHints(userID)
+        };
+        WebSocketMessage noTokensWs = new(
+            WebSocketMessageTypeEnums.Categories.GAME_SESSION.ToString(),
+            WebSocketMessageTypeEnums.GameSessionServerActions.HINT_RESPONSE.ToString(),
+            JsonSerializer.Serialize(noTokensResponse, webSocketService.JsonOptions)
+        );
+        await webSocketService.SendAsync(socket, JsonSerializer.Serialize(noTokensWs, webSocketService.JsonOptions));
+        return;
+      }
+
+      // Acquire a hint via the hint service
+      using var scope = webSocketService.ServiceScopeFactory.CreateScope();
+      var hintService = scope.ServiceProvider.GetRequiredService<WordRush.Core.Features.Hints.IHintService>();
+      string? hint = null;
+
+      try
+      {
+        hint = await hintService.GetHintAsync(letter, category);
+        Log.Information("[HINT] Model returned hint for {UserID}: {Hint}", userID, hint);
+      }
+      catch (Exception ex)
+      {
+        Log.Warning(ex, "[HINT] HintService exception for {UserID}. Category='{Category}', Letter='{Letter}'", userID, category, letter);
+      }
+
+      // Fallback text if model failed
+      if (string.IsNullOrWhiteSpace(hint))
+      {
+        hint = "No hint available.";
+        Log.Warning("[HINT] Empty hint result for {UserID}. Category='{Category}', Letter='{Letter}'", userID, category, letter);
+      }
+
+      var response = new
+      {
+        hint,
+        tokensLeft = room.GetRemainingHints(userID)
+      };
+
+      WebSocketMessage ws = new(
+          WebSocketMessageTypeEnums.Categories.GAME_SESSION.ToString(),
+          WebSocketMessageTypeEnums.GameSessionServerActions.HINT_RESPONSE.ToString(),
+          JsonSerializer.Serialize(response, webSocketService.JsonOptions)
+      );
+
+      await webSocketService.SendAsync(socket, JsonSerializer.Serialize(ws, webSocketService.JsonOptions));
+    }
+
   }
 }

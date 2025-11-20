@@ -11,7 +11,6 @@ namespace WordRush.Core.Features.Scoring
 {
   public class StopGameScoringService : IScoringService
   {
-    private const string BASEURL = "http://localhost:11434/api/generate";
     private readonly HttpClient httpClient;
     private readonly string ollamaModel;
     private readonly string ollamaBaseUrl;
@@ -30,7 +29,7 @@ namespace WordRush.Core.Features.Scoring
       httpClient.Timeout = Timeout.InfiniteTimeSpan; // disable automatic cancellation
 
       ollamaModel = config["Ollama:Model"] ?? "llama3";
-      ollamaBaseUrl = config["Ollama:BaseUrl"] ?? BASEURL;
+      ollamaBaseUrl = config["Ollama:BaseUrl"] ?? "http://localhost:11434/api/generate";
 
       int timeoutSeconds = int.TryParse(config["Ollama:RequestTimeoutSeconds"], out int t) ? t : 300;
       ollamaRequestTimeout = TimeSpan.FromSeconds(timeoutSeconds);
@@ -38,7 +37,7 @@ namespace WordRush.Core.Features.Scoring
       modelOptions = new
       {
         temperature = double.TryParse(config["Ollama:Options:temperature"], out double temp) ? temp : 0.15,
-        num_predict = int.TryParse(config["Ollama:Options:num_predict"], out int np) ? np : 2048
+        num_predict = int.TryParse(config["Ollama:Options:num_predict"], out int np) ? np : 1024
       };
     }
 
@@ -349,11 +348,13 @@ namespace WordRush.Core.Features.Scoring
         }
       }
 
+
       string prompt = BuildPrompt(request);
       // works with ollama descomment when ollama can run and use it instead of the JSON
       //string modelOutput = await SendToModelAsync(prompt, request);
 
 #region JSON WORKAROUND
+
       // Read from JSON file instead of calling the model
       string jsonFilePath = FindJsonFile();
       string modelOutput = File.Exists(jsonFilePath)
@@ -640,8 +641,8 @@ namespace WordRush.Core.Features.Scoring
     private static int EstimateNumPredict(StopGameRequest request)
     {
       const int BaseTokens = 600; // JSON overhead + prompt + structure
-      const int TokensPerCategory = 50; // per category *per player* heuristic
-      const double SafetyMargin = 1.3;  // add 30% buffer
+      const int TokensPerCategory = 60; // per category *per player* heuristic
+      const double SafetyMargin = 1.5;  // add 50% buffer
 
       int playerCount = request.Players?.Count ?? 0;
       int categoryCount = request.Categories?.Count ?? 0;
@@ -651,7 +652,7 @@ namespace WordRush.Core.Features.Scoring
       int adjusted = (int)(estimated * SafetyMargin);
 
       // Cap between reasonable limits to avoid overspending compute
-      return Math.Clamp(adjusted, 512, 4096);
+      return Math.Clamp(adjusted, 512, 6144);
     }
 
     // ----------------------------------------------------------

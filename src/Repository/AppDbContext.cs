@@ -25,6 +25,23 @@ namespace WordRush.Repository
 
     public DbSet<Role> Roles { get; set; }
 
+    public DbSet<GameStatistics> GameStatistics { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+      base.OnModelCreating(modelBuilder);
+
+      modelBuilder.Entity<GameStatistics>()
+        .HasOne(gs => gs.User)
+        .WithOne(u => u.GameStatistics)
+        .HasForeignKey<GameStatistics>(gs => gs.UserId)
+        .OnDelete(DeleteBehavior.Cascade);
+
+      modelBuilder.Entity<GameStatistics>()
+        .HasIndex(gs => gs.UserId)
+        .IsUnique();
+    }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
       if (!optionsBuilder.IsConfigured)

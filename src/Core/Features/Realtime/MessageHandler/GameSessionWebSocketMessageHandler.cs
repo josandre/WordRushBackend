@@ -82,6 +82,9 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
           // 🔹 Build final leaderboard
           List<GamePlayerScore> finalScores = room.Session.GetAllScores();
 
+          // Update game statistics for all players
+          await UpdateGameStatisticsAsync(webSocketService, room, finalScores);
+
           var finalResponse = new
           {
             Players = finalScores
@@ -181,6 +184,7 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
               Players = currentRound.Results.Select(r => new WordRush.Core.Features.Scoring.Models.PlayerEntry
               {
                 Name = r.User.Nickname,
+                UserId = r.User.UserId,
                 Answers = r.Answers.ToDictionary(a => a.Category, a => a.Answer)
               }).ToList()
             };
@@ -244,6 +248,62 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
       }
     }
 
+    private async Task UpdateGameStatisticsAsync(WordRushWebSocketService webSocketService, GameRoom room, List<GamePlayerScore> finalScores)
+    {
+      if (finalScores == null || finalScores.Count == 0)
+      {
+        return;
+      }
+
+      // Find the winner (player with highest TotalScore)
+      GamePlayerScore? winner = finalScores.OrderByDescending(p => p.TotalScore).FirstOrDefault();
+      if (winner == null)
+      {
+        return;
+      }
+
+      using (var scope = webSocketService.ServiceScopeFactory.CreateScope())
+      {
+        var gameStatisticsService = scope.ServiceProvider.GetRequiredService<IGameStatisticsService>();
+
+        // Update statistics for all players
+        foreach (var playerScore in finalScores)
+        {
+          // Find the UserId by matching nickname in room.Players
+          int? userId = null;
+          foreach (var kvp in room.Players)
+          {
+            if (string.Equals(kvp.Value.Nickname, playerScore.Nickname, StringComparison.OrdinalIgnoreCase))
+            {
+              userId = kvp.Value.UserId;
+              break;
+            }
+          }
+
+          if (userId.HasValue)
+          {
+            try
+            {
+              bool won = string.Equals(playerScore.Nickname, winner.Nickname, StringComparison.OrdinalIgnoreCase);
+              await gameStatisticsService.UpdateGameStatisticsAsync(userId.Value, won, playerScore.TotalScore);
+              
+              Log.Information(
+                "[STATISTICS] Updated stats for {Nickname} (UserId: {UserId}): Won={Won}, Score={Score}",
+                playerScore.Nickname, userId.Value, won, playerScore.TotalScore);
+            }
+            catch (Exception ex)
+            {
+              Log.Error(ex, "[STATISTICS] Failed to update statistics for {Nickname} (UserId: {UserId})",
+                playerScore.Nickname, userId);
+            }
+          }
+          else
+          {
+            Log.Warning("[STATISTICS] Could not find UserId for player {Nickname}", playerScore.Nickname);
+          }
+        }
+      }
+    }
     /// <summary>
     /// Handles a hint request from a client.  
     /// Validates the player's remaining hint tokens, invokes the AI hint service

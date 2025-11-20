@@ -1,0 +1,49 @@
+{
+  "letter": "A",
+  "categories": [
+    "Name",
+    "Country or City",
+    "Animal",
+    "Fruit or Food",
+    "Color"
+  ],
+  "players": [
+    {
+      "name": "jocs",
+      "userId": 4,
+      "answers": {
+        "Name": "Angel",
+        "Country or City": "Angola",
+        "Animal": "Anguila",
+        "Fruit or Food": "Avena",
+        "Color": "Ambar"
+      },
+      "scores": {
+        "Name": { "points": 10, "reason": "valid" },
+        "Country or City": { "points": 10, "reason": "valid" },
+        "Animal": { "points": 10, "reason": "valid" },
+        "Fruit or Food": { "points": 10, "reason": "valid" },
+        "Color": { "points": 10, "reason": "valid" }
+      }
+    },
+    {
+      "name": "andalucia",
+      "userId": 17,
+      "answers": {
+        "Name": "Andres",
+        "Country or City": "Alemania",
+        "Animal": "Avestruz",
+        "Fruit or Food": "Arroz",
+        "Color": "Azul"
+      },
+      "scores": {
+        "Name": { "points": 0, "reason": "invalid" },
+        "Country or City": { "points": 10, "reason": "valid" },
+        "Animal": { "points": 10, "reason": "valid" },
+        "Fruit or Food": { "points": 10, "reason": "valid" },
+        "Color": { "points": 10, "reason": "valid" }
+      }
+    }
+  ]
+}
+

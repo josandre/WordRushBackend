@@ -206,19 +206,40 @@ namespace WordRush.Core.Features.Scoring
           // Fallback to name-based matching if UserId matching didn't work
           if (matchingRequestPlayer == null)
           {
-            matchingRequestPlayer = originalRequest.Players
-              .FirstOrDefault(p => string.Equals(p.Name, player.Name, StringComparison.OrdinalIgnoreCase));
+            string NormalizeName(string s)
+            {
+              if (string.IsNullOrWhiteSpace(s))
+                return string.Empty;
+
+              // remove all whitespace
+              s = Regex.Replace(s, @"\s+", "");
+
+              // remove accents
+              s = s.Normalize(NormalizationForm.FormD);
+              s = new string(s.Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray());
+
+              return s.Trim().ToLowerInvariant();
+            }
+
 
             // If we matched by name, validate/copy the UserId from request
-            if (matchingRequestPlayer != null)
+            if (matchingRequestPlayer == null)
             {
-              if (player.UserId.HasValue && player.UserId != matchingRequestPlayer.UserId)
+              matchingRequestPlayer = originalRequest.Players
+                .FirstOrDefault(p =>
+                    NormalizeName(p.Name) == NormalizeName(player.Name)
+                );
+
+              if (matchingRequestPlayer != null)
+              {
+                player.UserId = matchingRequestPlayer.UserId;
+              }
+              else
               {
                 Log.Warning(
-                  "Name match found but UserId mismatch: JSON has UserId {JsonUserId} but request has UserId {RequestUserId} for player '{Name}'. Using request UserId.",
-                  player.UserId, matchingRequestPlayer.UserId, player.Name);
+                  "Could not match player '{Name}' (UserId: {UserId}) from JSON response to any player in the request.",
+                  player.Name, player.UserId);
               }
-              player.UserId = matchingRequestPlayer.UserId;
             }
             else
             {
@@ -332,6 +353,7 @@ namespace WordRush.Core.Features.Scoring
       // works with ollama descomment when ollama can run and use it instead of the JSON
       //string modelOutput = await SendToModelAsync(prompt, request);
 
+#region JSON WORKAROUND
 
       // Read from JSON file instead of calling the model
       string jsonFilePath = FindJsonFile();
@@ -340,6 +362,7 @@ namespace WordRush.Core.Features.Scoring
         : throw new FileNotFoundException($"Could not find sample-response.json file. Tried: {jsonFilePath}");
 
       Log.Information("Reading from JSON file: {FilePath}", jsonFilePath);
+#endregion
       Log.Information("JSON file content : \n{Output}", modelOutput);
 
       StopGameResponse? parsed = ParseResponse(modelOutput, request);

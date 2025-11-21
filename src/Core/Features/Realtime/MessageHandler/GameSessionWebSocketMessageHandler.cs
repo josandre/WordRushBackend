@@ -167,8 +167,6 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
         Console.WriteLine("All players have sent their answers, starting evaluation");
 
         // The data is ready to start the evaluation
-        // TODO: FRANCISCO Wait here until the system finishes with the evaluation, for now simply notify that the round has finished
-        // The data is ready to start the evaluation
         using (var scope = webSocketService.ServiceScopeFactory.CreateScope())
         {
           var scoringService = scope.ServiceProvider.GetRequiredService<IScoringService>();

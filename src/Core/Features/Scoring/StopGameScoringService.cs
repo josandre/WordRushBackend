@@ -351,18 +351,19 @@ namespace WordRush.Core.Features.Scoring
 
       string prompt = BuildPrompt(request);
       // works with ollama descomment when ollama can run and use it instead of the JSON
-      //string modelOutput = await SendToModelAsync(prompt, request);
+      string modelOutput = await SendToModelAsync(prompt, request);
 
 #region JSON WORKAROUND
 
       // Read from JSON file instead of calling the model
-      string jsonFilePath = FindJsonFile();
-      string modelOutput = File.Exists(jsonFilePath)
-        ? await File.ReadAllTextAsync(jsonFilePath)
-        : throw new FileNotFoundException($"Could not find sample-response.json file. Tried: {jsonFilePath}");
+      //string jsonFilePath = FindJsonFile();
+      //string modelOutput = File.Exists(jsonFilePath)
+      //  ? await File.ReadAllTextAsync(jsonFilePath)
+      //  : throw new FileNotFoundException($"Could not find sample-response.json file. Tried: {jsonFilePath}");
 
-      Log.Information("Reading from JSON file: {FilePath}", jsonFilePath);
+      //Log.Information("Reading from JSON file: {FilePath}", jsonFilePath);
 #endregion
+
       Log.Information("JSON file content : \n{Output}", modelOutput);
 
       StopGameResponse? parsed = ParseResponse(modelOutput, request);

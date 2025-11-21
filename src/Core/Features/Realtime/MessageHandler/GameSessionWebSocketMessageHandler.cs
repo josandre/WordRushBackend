@@ -30,9 +30,10 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
         case WebSocketMessageTypeEnums.GameSessionClientActions.SEND_ROUND_ANSWERS:
           await OnPlayerSentRoundAnswers(webSocketService, userID, jsonData);
           break;
-      case WebSocketMessageTypeEnums.GameSessionClientActions.REQUEST_HINT:
-        await OnPlayerRequestedHint(webSocketService, socket, userID, jsonData);
-        break;
+        case WebSocketMessageTypeEnums.GameSessionClientActions.REQUEST_HINT:
+          await OnPlayerRequestedHint(webSocketService, socket, userID, jsonData);
+          break;
+        default: break;
       }
     }
 

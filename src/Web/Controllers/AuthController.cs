@@ -22,6 +22,11 @@ namespace WordRush.Web.Controllers
 
       if (user != null)
       {
+        if (!user.IsActive)
+        {
+          return BadRequest(new { success = false, message = "ACCOUNT_INACTIVE" });
+        }
+
         Microsoft.AspNetCore.Identity.SignInResult passValidationResult = await signInManager.CheckPasswordSignInAsync(user, request.Password, true);
 
         if (passValidationResult.Succeeded)

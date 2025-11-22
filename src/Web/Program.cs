@@ -161,6 +161,9 @@ builder.Services
     // Register hint service for AI-powered hint generation
     .AddScoped<IHintService, WordRush.Core.Features.Hints.HintService>();
 
+// Register administrative services
+builder.Services.AddScoped<WordRush.Core.Features.Admin.IAdminService, WordRush.Core.Features.Admin.AdminService>();
+
 builder.Host.UseSerilog();
 
 // ------------------------------------------------------------

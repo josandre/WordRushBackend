@@ -22,6 +22,8 @@ public class User : IdentityUser<int>
   [Required]
   public DateTime CreatedOn { get; set; }
 
+  public bool IsActive { get; set; } = true;
+
   [Required]
   public DateTime UpdatedOn { get; set; }
 

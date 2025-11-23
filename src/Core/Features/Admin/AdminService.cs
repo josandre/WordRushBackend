@@ -82,5 +82,30 @@ namespace WordRush.Core.Features.Admin
       await dbContext.SaveChangesAsync();
       return true;
     }
+
+    public async Task<bool> SetUserRoleAsync(int userId, int roleId)
+    {
+      User? user = await dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
+
+      if (user == null)
+      {
+        return false;
+      }
+
+      // Protección: evitar que el único admin se quite a sí mismo
+      if (roleId == 1 && user.RoleId == 2)
+      {
+        bool hasOtherAdmins = await dbContext.Users.AnyAsync(u => u.RoleId == 2 && u.Id != userId);
+        if (!hasOtherAdmins)
+        {
+          return false; // no se puede dejar al sistema sin administrador
+        }
+      }
+
+      user.RoleId = roleId;
+      _ = await dbContext.SaveChangesAsync();
+      return true;
+    }
+
   }
 }

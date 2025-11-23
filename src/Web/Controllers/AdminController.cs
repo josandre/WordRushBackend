@@ -42,5 +42,13 @@ namespace WordRush.Web.Controllers
 
       return NoContent();
     }
+
+    [HttpPost("user/{id:int}/set-role")]
+    public async Task<IActionResult> SetRole(int id, [FromQuery] int roleId)
+    {
+      bool ok = await adminService.SetUserRoleAsync(id, roleId);
+
+      return !ok ? BadRequest("Unable to change role.") : NoContent();
+    }
   }
 }

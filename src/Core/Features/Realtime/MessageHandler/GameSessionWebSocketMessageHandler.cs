@@ -80,7 +80,7 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
 
           Console.WriteLine($"GAME FINISHED");
 
-          // 🔹 Build final leaderboard
+          // Build final leaderboard
           List<GamePlayerScore> finalScores = room.Session.GetAllScores();
 
           // Update game statistics for all players
@@ -197,13 +197,13 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
             {
               Log.Information("[SCORING] Round {Letter} evaluated successfully for room {RoomId}", currentRound.Letter, room.RoomId);
 
-              // 🔹 Update cumulative totals for each player in the session
+              // Update cumulative totals for each player in the session
               foreach (var scoredPlayer in scoredResponse.Players)
               {
                 room.Session.AddOrUpdatePlayerScore(scoredPlayer.Name, scoredPlayer.Total);
               }
 
-              // ✅ Optional: log current standings
+              // Optional: log current standings
               foreach (var p in room.Session.Players.Values)
               {
                 Log.Information("[STANDINGS] {Name}: {Score}", p.Nickname, p.TotalScore);

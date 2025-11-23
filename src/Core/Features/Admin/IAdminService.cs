@@ -17,5 +17,8 @@ namespace WordRush.Core.Features.Admin
     /// Toggles the active flag of a user.
     /// </summary>
     Task<bool> ToggleUserActiveAsync(int userId);
+
+    Task<bool> SetUserRoleAsync(int userId, int roleId);
+
   }
 }

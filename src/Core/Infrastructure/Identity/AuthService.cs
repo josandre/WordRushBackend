@@ -28,9 +28,9 @@ public class AuthService : IAuthService
 
   public async Task<LoginResponse> Login(User user)
   {
-    var result = new LoginResponse
+    LoginResponse result = new()
     {
-      AccessToken = await this.GenerateTokenAsync(user),
+      AccessToken = await GenerateTokenAsync(user),
     };
 
     return result;
@@ -38,14 +38,14 @@ public class AuthService : IAuthService
 
   private async Task<string> GenerateTokenAsync(User user)
   {
-    var claims = new List<Claim>
-    {
+    List<Claim> claims =
+    [
       new(JwtRegisteredClaimNames.Sub, user.UserName ?? string.Empty),
       new(ClaimTypes.NameIdentifier, user.Id.ToString()),
       new(ClaimTypes.Name, user.UserName ?? string.Empty)
-    };
+    ];
 
-    var role = await _roleService.GetRoleById(user.RoleId);
+    Role role = await _roleService.GetRoleById(user.RoleId);
     claims.Add(new Claim(ClaimTypes.Role, role.Name));
 
     var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_key));

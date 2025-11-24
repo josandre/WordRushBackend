@@ -178,7 +178,7 @@ public class GameRoom
     lock (_lock)
     {
       Session = new();
-      Session.Setup(Settings.LettersArray);
+      Session.Setup(Settings.Letters);
     }
   }
 

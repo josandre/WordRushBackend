@@ -13,7 +13,7 @@ public class GameSettings
 
   public LetterOrder Order { get; set; } = LetterOrder.Ascending;
 
-  public string[] LettersArray
+  public string[] Letters
   {
     get => letters.ToArray();
     set
@@ -29,7 +29,7 @@ public class GameSettings
     }
   }
 
-  public string[] CategoriesArray
+  public string[] Categories
   {
     get => categories.ToArray();
     set

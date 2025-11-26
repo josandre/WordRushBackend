@@ -129,8 +129,7 @@ namespace WordRush.Core.Features.Settings
           using JsonDocument inner = JsonDocument.Parse(embeddedJson);
           if (inner.RootElement.TryGetProperty("isValid", out JsonElement h))
           {
-            stringValue = h.GetString() ?? stringValue;
-            isValid = bool.Parse(stringValue);
+            isValid = h.GetBoolean();
           }
         }
         catch (Exception jex)

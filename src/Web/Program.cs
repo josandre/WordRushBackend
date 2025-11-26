@@ -11,6 +11,7 @@ using WordRush.Core.Features.Game.CategoryColumns;
 using WordRush.Core.Features.Game.CategoryTypes;
 using WordRush.Core.Features.Realtime;
 using WordRush.Core.Features.Scoring;
+using WordRush.Core.Features.Settings;
 using WordRush.Core.Features.Hints;
 using WordRush.Core.Infrastructure.Identity;
 using WordRush.Repository;
@@ -159,7 +160,8 @@ builder.Services
     .AddScoped<ICategoryColumns, CategoryColumnsService>()
     .AddScoped<ICategoryTypes, CategoryTypesService>()
     // Register hint service for AI-powered hint generation
-    .AddScoped<IHintService, WordRush.Core.Features.Hints.HintService>();
+    .AddScoped<IHintService, HintService>()
+    .AddScoped<ICategoryValidationService, CategoryValidationService>();
 
 builder.Host.UseSerilog();
 

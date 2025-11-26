@@ -250,10 +250,22 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
       CheckValidCategoryEvent checkValidCategoryEvent = JsonSerializer.Deserialize<CheckValidCategoryEvent>(jsonData);
 
       Console.WriteLine($"Checking if {checkValidCategoryEvent.Category} is valid");
-      bool isValidCategory = true;  // TODO: Actually send the prompt and check if the category is valid
+      bool? isValidCategory = true;  // TODO: Actually send the prompt and check if the category is valid
+
+      using var scope = webSocketService.ServiceScopeFactory.CreateScope();
+      var categoryValidationService = scope.ServiceProvider.GetRequiredService<WordRush.Core.Features.Settings.ICategoryValidationService>();
+
+      try
+      {
+        isValidCategory = await categoryValidationService.GetCategoryValidationAsync(checkValidCategoryEvent.Category);
+      }
+      catch (Exception ex)
+      {
+        Log.Warning("[CATEGORY VALIDATION] Category validation exception: " + ex.Message);
+      }
 
       CheckValidCategoryResultEvent resultJsonData = new();
-      resultJsonData.IsValidCategory = isValidCategory;
+      resultJsonData.IsValidCategory = (bool)isValidCategory;
       resultJsonData.Category = checkValidCategoryEvent.Category;
 
       // Send message

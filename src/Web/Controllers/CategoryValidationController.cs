@@ -19,7 +19,7 @@ namespace WordRush.Web.Controllers
     /// </summary>
     /// <param name="category">The category.</param>
     /// <returns>True or false.</returns>
-    [HttpGet("get-hint")]
+    [HttpGet("get-category-validation")]
     public async Task<IActionResult> CategoryValidationCheck([FromQuery] string category)
     {
       if (string.IsNullOrWhiteSpace(category))

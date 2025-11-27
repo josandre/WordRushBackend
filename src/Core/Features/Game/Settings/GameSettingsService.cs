@@ -24,12 +24,6 @@ public class GameSettingsService : IGameSettingsService
     if (room != null)
     {
       room.UpdateSettings(settings);
-      
-      if (_webSocketService is WordRushWebSocketService webSocketService)
-      {
-        await GameRoomWebSocketMessageHandler.BroadcastRoomData(webSocketService, room);
-      }
-      
       return room;
     }
 

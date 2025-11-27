@@ -152,7 +152,7 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
         List<GameAnswer> answers = new();
         for (int i = 0; i < receivedEvent.Answers.Count; i++)
         {
-          answers.Add(new(room.Settings.CategoriesArray[i], receivedEvent.Answers[i]));
+          answers.Add(new(room.Settings.Categories[i], receivedEvent.Answers[i]));
         }
 
         GameRoundResult result = new();
@@ -179,7 +179,7 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
             var request = new WordRush.Core.Features.Scoring.Models.StopGameRequest
             {
               Letter = currentRound.Letter,
-              Categories = room.Settings.CategoriesArray.ToList(),
+              Categories = room.Settings.Categories.ToList(),
               Players = currentRound.Results.Select(r => new WordRush.Core.Features.Scoring.Models.PlayerEntry
               {
                 Name = r.User.Nickname,

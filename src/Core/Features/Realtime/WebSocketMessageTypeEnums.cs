@@ -21,6 +21,7 @@ namespace WordRush.Core.Features.Realtime
       LEAVE,
       TOGGLE_READY,
       REQUEST_DATA,
+      VALID_CATEGORY_CHECK,
       START_GAME
     }
 
@@ -31,6 +32,7 @@ namespace WordRush.Core.Features.Realtime
       JOINED_NON_EXISTING_ROOM,
       DATA_UPDATED,
       CLOSED,
+      VALID_CATEGORY_CHECK_RESULT,
       GAME_STARTED
     }
 

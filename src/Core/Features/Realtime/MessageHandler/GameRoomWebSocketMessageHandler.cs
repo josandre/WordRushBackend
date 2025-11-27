@@ -5,6 +5,7 @@ using Serilog;
 using WordRush.Core.Features.Game.CategoryTypes;
 using WordRush.Core.Features.Realtime.Models;
 using WordRush.Core.Features.Realtime.Models.CreateRoom;
+using WordRush.Core.Features.Realtime.Models.GameSession;
 using WordRush.Core.Features.Realtime.Models.JoinRoom;
 using WordRush.Repository.Models;
 
@@ -39,6 +40,9 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
           break;
         case WebSocketMessageTypeEnums.GameRoomClientActions.START_GAME:
           await StartGame(webSocketService, userID);
+          break;
+        case WebSocketMessageTypeEnums.GameRoomClientActions.VALID_CATEGORY_CHECK:
+          await CheckIfValidCategory(webSocketService, socket, jsonData);
           break;
         default:
           break;
@@ -93,7 +97,7 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
       {
         settingsCategories.Add(dbCategories[i].Column);
       }
-      room.Settings.CategoriesArray = settingsCategories.ToArray();
+      room.Settings.Categories = settingsCategories.ToArray();
 
       string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
       string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.CREATED.ToString();
@@ -239,6 +243,38 @@ namespace WordRush.Core.Features.Realtime.MessageHandler
           await webSocketService.BroadcastToRoomAsync(room.RoomId, JsonSerializer.Serialize(message));
         }
       }
+    }
+
+    private async Task CheckIfValidCategory(WordRushWebSocketService webSocketService, WebSocket socket, string jsonData)
+    {
+      CheckValidCategoryEvent checkValidCategoryEvent = JsonSerializer.Deserialize<CheckValidCategoryEvent>(jsonData);
+
+      Console.WriteLine($"Checking if {checkValidCategoryEvent.Category} is valid");
+      bool? isValidCategory = true;  // TODO: Actually send the prompt and check if the category is valid
+
+      using var scope = webSocketService.ServiceScopeFactory.CreateScope();
+      var categoryValidationService = scope.ServiceProvider.GetRequiredService<WordRush.Core.Features.Settings.ICategoryValidationService>();
+
+      try
+      {
+        isValidCategory = await categoryValidationService.GetCategoryValidationAsync(checkValidCategoryEvent.Category);
+      }
+      catch (Exception ex)
+      {
+        Log.Warning("[CATEGORY VALIDATION] Category validation exception: " + ex.Message);
+      }
+
+      CheckValidCategoryResultEvent resultJsonData = new();
+      resultJsonData.IsValidCategory = (bool)isValidCategory;
+      resultJsonData.Category = checkValidCategoryEvent.Category;
+
+      // Send message
+      string messageCategory = WebSocketMessageTypeEnums.Categories.GAME_ROOM.ToString();
+      string messageAction = WebSocketMessageTypeEnums.GameRoomServerActions.VALID_CATEGORY_CHECK_RESULT.ToString();
+
+      // Broadcast the new phase to all players in the room
+      WebSocketMessage message = new(messageCategory, messageAction, JsonSerializer.Serialize(resultJsonData));
+      await webSocketService.SendAsync(socket, JsonSerializer.Serialize(message));
     }
 
     /// <summary>
